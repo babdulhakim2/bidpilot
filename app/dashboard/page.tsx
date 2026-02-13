@@ -596,6 +596,7 @@ export default function Dashboard() {
               <h1 className="font-display text-2xl font-bold text-gray-900">Profile</h1>
             </div>
 
+            {/* Company Info Card */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center">
@@ -618,10 +619,10 @@ export default function Dashboard() {
                 )}
                 {profile.categories.length > 0 && (
                   <div>
-                    <label className="text-sm text-gray-500">Categories</label>
+                    <label className="text-sm text-gray-500">Business Categories</label>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {profile.categories.map((cat) => (
-                        <span key={cat} className="px-3 py-1 bg-primary-50 text-primary-700 text-sm rounded-full">
+                        <span key={cat} className="px-3 py-1 bg-primary-50 text-primary-700 text-sm rounded-full capitalize">
                           {cat}
                         </span>
                       ))}
@@ -631,22 +632,49 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Account Details Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-gray-500" />
+                Account Details
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                  <div>
+                    <p className="text-sm text-gray-500">Company Name</p>
+                    <p className="font-medium text-gray-900">{profile.companyName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                  <div>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="font-medium text-gray-900">{profile.email || 'Not set'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                  <div>
+                    <p className="text-sm text-gray-500">Phone</p>
+                    <p className="font-medium text-gray-900">{profile.phone || 'Not set'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Profile Completeness</p>
+                    <p className="font-medium text-primary-600">{profile.completeness}%</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Subscription */}
             <div className="space-y-3">
               <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
-                <Settings className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Account Settings</span>
-              </button>
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
-                <Bell className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Notifications</span>
-              </button>
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
                 <CreditCard className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Subscription</span>
-              </button>
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
-                <HelpCircle className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Help & Support</span>
+                <div className="flex-1">
+                  <span className="font-medium text-gray-900">Subscription</span>
+                  <p className="text-sm text-gray-500">Free Plan</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
               </button>
             </div>
           </>

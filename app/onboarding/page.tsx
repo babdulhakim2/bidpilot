@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import { useMutation } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 import { 
   Building2, ChevronRight, ChevronLeft, Check, 
   Construction, Monitor, Users, Package, Sun, Briefcase,
@@ -26,6 +29,9 @@ const CATEGORIES = [
 
 export default function Onboarding() {
   const router = useRouter();
+  const { user: clerkUser } = useUser();
+  const upsertUser = useMutation(api.users.upsert);
+  
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -47,19 +53,24 @@ export default function Onboarding() {
   };
 
   const handleComplete = async () => {
+    if (!clerkUser?.id) return;
+    
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // In real app, save to backend/localStorage
-    localStorage.setItem('bidpilot_profile', JSON.stringify({
-      companyName,
-      categories: selectedCategories,
-      googleConnected,
-      completedAt: new Date().toISOString()
-    }));
-    
-    router.push('/dashboard');
+    try {
+      // Save user to Convex
+      await upsertUser({
+        clerkId: clerkUser.id,
+        companyName,
+        email: clerkUser.emailAddresses[0]?.emailAddress,
+        categories: selectedCategories,
+        googleConnected,
+      });
+      
+      router.push('/dashboard');
+    } catch (error) {
+      console.error('Failed to save profile:', error);
+      setIsSubmitting(false);
+    }
   };
 
   const handleGoogleConnect = () => {

@@ -17,23 +17,36 @@ export default defineSchema({
 
   // Tenders table - available opportunities
   tenders: defineTable({
+    // Core fields
     title: v.string(),
     organization: v.string(),
     budget: v.number(),
     deadline: v.string(),
     category: v.string(),
-    matchScore: v.optional(v.number()),
-    status: v.union(v.literal("qualified"), v.literal("partial"), v.literal("low")),
-    requirements: v.array(v.string()),
-    missing: v.array(v.string()),
+    categories: v.optional(v.array(v.string())), // Multiple categories
     description: v.string(),
     location: v.string(),
-    source: v.string(),
+    requirements: v.array(v.string()),
+    missing: v.array(v.string()),
+    
+    // Matching
+    matchScore: v.optional(v.number()),
+    status: v.union(v.literal("qualified"), v.literal("partial"), v.literal("low")),
+    
+    // Source tracking (for deduplication)
+    source: v.string(),           // e.g., "publicprocurement.ng"
+    sourceId: v.optional(v.string()),  // Unique ID from source for dedup
+    sourceUrl: v.optional(v.string()), // Original URL
+    
+    // Timestamps
     publishedAt: v.string(),
+    scrapedAt: v.optional(v.number()), // When we scraped it
   })
     .index("by_category", ["category"])
     .index("by_deadline", ["deadline"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_source_id", ["source", "sourceId"])
+    .index("by_scraped_at", ["scrapedAt"]),
 
   // User-specific tender data (saved status, match scores per user)
   userTenders: defineTable({
@@ -51,11 +64,28 @@ export default defineSchema({
     userId: v.id("users"),
     name: v.string(),
     type: v.string(), // pdf, zip, doc, etc.
-    status: v.union(v.literal("verified"), v.literal("processing"), v.literal("rejected")),
+    status: v.union(v.literal("verified"), v.literal("processing"), v.literal("rejected"), v.literal("extracting")),
     category: v.string(), // Registration, Tax, Profile, Experience, etc.
     size: v.string(),
     storageId: v.optional(v.id("_storage")), // Convex storage reference
     uploadedAt: v.number(),
+    // LLM extracted content
+    extractedContent: v.optional(v.string()), // Markdown content
+    extractedInsights: v.optional(v.object({
+      summary: v.optional(v.string()),
+      companyName: v.optional(v.string()),
+      industry: v.optional(v.string()),
+      services: v.optional(v.array(v.string())),
+      experience: v.optional(v.array(v.string())),
+      certifications: v.optional(v.array(v.string())),
+      contacts: v.optional(v.object({
+        email: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        address: v.optional(v.string()),
+      })),
+      keyFacts: v.optional(v.array(v.string())),
+    })),
+    extractionError: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_category", ["category"])

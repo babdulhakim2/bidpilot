@@ -8,14 +8,14 @@ export default function BottomNav() {
   
   const tabs = [
     { id: 'home' as const, icon: Home, label: 'Home' },
-    { id: 'tenders' as const, icon: Search, label: 'Tenders' },
+    { id: 'tenders' as const, icon: Search, label: 'Opportunities' },
     { id: 'vault' as const, icon: FolderOpen, label: 'Vault' },
     { id: 'proposals' as const, icon: FileText, label: 'Proposals', badge: proposals.length },
     { id: 'profile' as const, icon: User, label: 'Profile' },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-pb">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 safe-area-pb lg:hidden">
       <div className="flex items-center justify-around h-16">
         {tabs.map((tab) => {
           const Icon = tab.icon;

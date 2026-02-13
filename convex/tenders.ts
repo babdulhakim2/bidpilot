@@ -1,11 +1,64 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 
-// Get all tenders
+// Get all tenders (newest first by scrapedAt or publishedAt)
 export const list = query({
   args: {},
   handler: async (ctx) => {
     return await ctx.db.query("tenders").order("desc").collect();
+  },
+});
+
+// Get tenders with pagination for live feed
+export const listRecent = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 20;
+    return await ctx.db
+      .query("tenders")
+      .withIndex("by_scraped_at")
+      .order("desc")
+      .take(limit);
+  },
+});
+
+// Check if tender exists by source ID (for deduplication)
+export const getBySourceId = query({
+  args: { source: v.string(), sourceId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("tenders")
+      .withIndex("by_source_id", (q) => 
+        q.eq("source", args.source).eq("sourceId", args.sourceId)
+      )
+      .first();
+  },
+});
+
+// Create tender from scraper
+export const createFromScraper = mutation({
+  args: {
+    title: v.string(),
+    organization: v.string(),
+    budget: v.number(),
+    deadline: v.string(),
+    category: v.string(),
+    categories: v.optional(v.array(v.string())),
+    description: v.string(),
+    location: v.string(),
+    requirements: v.array(v.string()),
+    missing: v.array(v.string()),
+    source: v.string(),
+    sourceId: v.string(),
+    sourceUrl: v.string(),
+    publishedAt: v.string(),
+    status: v.union(v.literal("qualified"), v.literal("partial"), v.literal("low")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("tenders", {
+      ...args,
+      scrapedAt: Date.now(),
+    });
   },
 });
 

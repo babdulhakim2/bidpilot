@@ -11,7 +11,8 @@ import {
   Bell, Target, Calendar, Wallet, Pin, FolderOpen, FileText, 
   Settings, CreditCard, HelpCircle, LogOut, Trash2, Upload,
   Check, Loader2, Send, Download, Package, File, ChevronRight,
-  ClipboardList, Building2, MapPin, ExternalLink, Bookmark, Sparkles, X
+  ClipboardList, Building2, MapPin, ExternalLink, Bookmark, Sparkles, X,
+  Pencil, Save
 } from 'lucide-react';
 import UploadModal from '@/components/UploadModal';
 
@@ -43,6 +44,14 @@ export default function Dashboard() {
   const [selectedTender, setSelectedTender] = useState<any>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: Id<"documents">; name: string } | null>(null);
+  
+  // Profile edit state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editCompanyName, setEditCompanyName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editCategories, setEditCategories] = useState<string[]>([]);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Close modal when switching tabs
   useEffect(() => {
@@ -58,6 +67,7 @@ export default function Dashboard() {
   const createProposal = useMutation(api.proposals.create);
   const generateProposal = useMutation(api.proposals.generate);
   const deleteDocument = useMutation(api.documents.remove);
+  const updateProfile = useMutation(api.users.updateMe);
 
   // Loading state
   if (!isLoaded) {
@@ -156,6 +166,22 @@ export default function Dashboard() {
                 <MapPin className="w-4 h-4" />
                 <span className="text-sm">{selectedTender.location}</span>
               </div>
+              {selectedTender.source && (
+                <div className="flex items-center gap-2 text-gray-600 mb-4">
+                  <ExternalLink className="w-4 h-4" />
+                  <span className="text-sm">Source: {selectedTender.source}</span>
+                  {selectedTender.sourceUrl && (
+                    <a 
+                      href={selectedTender.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-primary-600 hover:text-primary-700 underline"
+                    >
+                      View Original
+                    </a>
+                  )}
+                </div>
+              )}
               {selectedTender.budget > 0 && (
                 <div className="font-display text-2xl font-bold text-primary-600 mb-4">
                   {formatNaira(selectedTender.budget)}
@@ -230,11 +256,10 @@ export default function Dashboard() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-8">
               {[
                 { label: 'Matches', value: tenders.length.toString(), sublabel: 'available', icon: Target, color: 'bg-primary-50 text-primary-700' },
                 { label: 'Deadlines', value: tenders.filter((t: any) => daysUntil(t.deadline) <= 7).length.toString(), sublabel: 'this week', icon: Calendar, color: 'bg-amber-50 text-amber-700' },
-                { label: 'Value', value: `₦${(tenders.reduce((sum: number, t: any) => sum + t.budget, 0) / 1000000).toFixed(0)}M`, sublabel: 'total', icon: Wallet, color: 'bg-emerald-50 text-emerald-700' },
               ].map((stat) => {
                 const Icon = stat.icon;
                 return (
@@ -279,7 +304,23 @@ export default function Dashboard() {
                       )}
                     </div>
                     <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base line-clamp-2">{toTitleCase(tender.title)}</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 mb-2 truncate">{toTitleCase(tender.organization)}</p>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{toTitleCase(tender.organization)}</p>
+                    {tender.source && (
+                      <div className="flex items-center gap-1 mb-2">
+                        <span className="text-[10px] sm:text-xs text-gray-400">Source: {tender.source}</span>
+                        {tender.sourceUrl && (
+                          <a 
+                            href={tender.sourceUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-primary-600 hover:text-primary-700"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       {tender.budget > 0 ? (
                         <span className="font-display font-bold text-primary-600 text-sm sm:text-base">{formatNaira(tender.budget)}</span>
@@ -388,7 +429,23 @@ export default function Dashboard() {
                     )}
                   </div>
                   <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base line-clamp-2">{toTitleCase(tender.title)}</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 mb-2 truncate">{toTitleCase(tender.organization)}</p>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{toTitleCase(tender.organization)}</p>
+                  {tender.source && (
+                    <div className="flex items-center gap-1 mb-2">
+                      <span className="text-[10px] sm:text-xs text-gray-400">Source: {tender.source}</span>
+                      {tender.sourceUrl && (
+                        <a 
+                          href={tender.sourceUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-primary-600 hover:text-primary-700"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     {tender.budget > 0 ? (
                       <span className="font-display font-bold text-primary-600 text-sm sm:text-base">{formatNaira(tender.budget)}</span>
@@ -469,7 +526,7 @@ export default function Dashboard() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteDocument({ id: doc._id });
+                        setDeleteConfirm({ id: doc._id, name: doc.name });
                       }}
                       className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"
                     >
@@ -544,61 +601,170 @@ export default function Dashboard() {
         {/* ========== PROFILE TAB ========== */}
         {activeTab === 'profile' && (
           <>
-            <div className="mb-6">
+            <div className="flex items-center justify-between mb-6">
               <h1 className="font-display text-2xl font-bold text-gray-900">Profile</h1>
+              {!isEditingProfile ? (
+                <button
+                  onClick={() => {
+                    setEditCompanyName(profile.companyName);
+                    setEditPhone(profile.phone || '');
+                    setEditCategories(profile.categories);
+                    setIsEditingProfile(true);
+                  }}
+                  className="px-4 py-2 text-primary-600 font-medium rounded-xl hover:bg-primary-50 flex items-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" /> Edit
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsEditingProfile(false)}
+                    className="px-4 py-2 text-gray-600 font-medium rounded-xl hover:bg-gray-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setIsSavingProfile(true);
+                      try {
+                        await updateProfile({
+                          companyName: editCompanyName,
+                          phone: editPhone || undefined,
+                          categories: editCategories,
+                        });
+                        setIsEditingProfile(false);
+                      } catch (e) {
+                        console.error('Failed to update profile:', e);
+                      } finally {
+                        setIsSavingProfile(false);
+                      }
+                    }}
+                    disabled={isSavingProfile}
+                    className="px-4 py-2 bg-primary-600 text-white font-medium rounded-xl hover:bg-primary-700 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isSavingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Save
+                  </button>
+                </div>
+              )}
             </div>
 
+            {/* Company Info Card */}
             <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center">
                   <span className="text-2xl font-bold text-primary-600">
-                    {profile.companyName.charAt(0)}
+                    {(isEditingProfile ? editCompanyName : profile.companyName).charAt(0)}
                   </span>
                 </div>
-                <div>
-                  <h2 className="font-display font-bold text-xl text-gray-900">{profile.companyName}</h2>
-                  <p className="text-gray-500">{profile.email}</p>
+                <div className="flex-1">
+                  {isEditingProfile ? (
+                    <input
+                      type="text"
+                      value={editCompanyName}
+                      onChange={(e) => setEditCompanyName(e.target.value)}
+                      className="font-display font-bold text-xl text-gray-900 w-full px-3 py-2 border border-gray-200 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                      placeholder="Company Name"
+                    />
+                  ) : (
+                    <>
+                      <h2 className="font-display font-bold text-xl text-gray-900">{profile.companyName}</h2>
+                      <p className="text-gray-500">{profile.email}</p>
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-4">
-                {profile.phone && (
-                  <div>
-                    <label className="text-sm text-gray-500">Phone</label>
-                    <p className="font-medium text-gray-900">{profile.phone}</p>
-                  </div>
-                )}
-                {profile.categories.length > 0 && (
-                  <div>
-                    <label className="text-sm text-gray-500">Categories</label>
+                <div>
+                  <label className="text-sm text-gray-500">Phone</label>
+                  {isEditingProfile ? (
+                    <input
+                      type="tel"
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 border border-gray-200 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                      placeholder="+234 800 000 0000"
+                    />
+                  ) : (
+                    <p className="font-medium text-gray-900">{profile.phone || 'Not set'}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-500">Business Categories</label>
+                  {isEditingProfile ? (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {['construction', 'ict', 'consultancy', 'supplies', 'solar', 'professional', 'maintenance', 'logistics', 'education', 'healthcare', 'security', 'electrical'].map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setEditCategories(prev => 
+                              prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                            );
+                          }}
+                          className={`px-3 py-1.5 text-sm rounded-full transition capitalize ${
+                            editCategories.includes(cat)
+                              ? 'bg-primary-600 text-white'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  ) : profile.categories.length > 0 ? (
                     <div className="flex flex-wrap gap-2 mt-1">
                       {profile.categories.map((cat) => (
-                        <span key={cat} className="px-3 py-1 bg-primary-50 text-primary-700 text-sm rounded-full">
+                        <span key={cat} className="px-3 py-1 bg-primary-50 text-primary-700 text-sm rounded-full capitalize">
                           {cat}
                         </span>
                       ))}
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="font-medium text-gray-400 mt-1">No categories selected</p>
+                  )}
+                </div>
               </div>
             </div>
 
+            {/* Account Details Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Settings className="w-5 h-5 text-gray-500" />
+                Account Info
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                  <div>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="font-medium text-gray-900">{profile.email || 'Not set'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <div>
+                    <p className="text-sm text-gray-500">Profile Completeness</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary-500 rounded-full" style={{ width: `${profile.completeness}%` }}></div>
+                      </div>
+                      <span className="font-medium text-primary-600">{profile.completeness}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Subscription */}
             <div className="space-y-3">
               <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
-                <Settings className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Account Settings</span>
-              </button>
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
-                <Bell className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Notifications</span>
-              </button>
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
                 <CreditCard className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Subscription</span>
-              </button>
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
-                <HelpCircle className="w-5 h-5 text-gray-500" />
-                <span className="font-medium text-gray-900">Help & Support</span>
+                <div className="flex-1">
+                  <span className="font-medium text-gray-900">Subscription</span>
+                  <p className="text-sm text-gray-500">Free Plan</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
               </button>
             </div>
           </>
@@ -610,6 +776,46 @@ export default function Dashboard() {
         isOpen={showUploadModal} 
         onClose={() => setShowUploadModal(false)} 
       />
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setDeleteConfirm(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Document?</h3>
+              <p className="text-gray-600 text-sm">
+                Are you sure you want to delete <strong>{deleteConfirm.name}</strong>? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  deleteDocument({ id: deleteConfirm.id });
+                  setDeleteConfirm(null);
+                }}
+                className="flex-1 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,9 +8,14 @@
  * @module
  */
 
+import type * as billing_helpers from "../billing/helpers.js";
+import type * as billing_paystack from "../billing/paystack.js";
+import type * as billing_subscriptions from "../billing/subscriptions.js";
+import type * as billing_webhook from "../billing/webhook.js";
 import type * as crons from "../crons.js";
 import type * as documents from "../documents.js";
 import type * as extraction_gemini from "../extraction/gemini.js";
+import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as proposals from "../proposals.js";
 import type * as scrapers_publicprocurement from "../scrapers/publicprocurement.js";
@@ -28,9 +33,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "billing/helpers": typeof billing_helpers;
+  "billing/paystack": typeof billing_paystack;
+  "billing/subscriptions": typeof billing_subscriptions;
+  "billing/webhook": typeof billing_webhook;
   crons: typeof crons;
   documents: typeof documents;
   "extraction/gemini": typeof extraction_gemini;
+  http: typeof http;
   "lib/auth": typeof lib_auth;
   proposals: typeof proposals;
   "scrapers/publicprocurement": typeof scrapers_publicprocurement;

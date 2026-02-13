@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth, UserButton } from '@clerk/nextjs';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
@@ -758,14 +759,17 @@ export default function Dashboard() {
 
             {/* Subscription */}
             <div className="space-y-3">
-              <button className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50">
+              <Link 
+                href="/billing"
+                className="w-full p-4 bg-white rounded-xl border border-gray-200 text-left flex items-center gap-4 hover:bg-gray-50"
+              >
                 <CreditCard className="w-5 h-5 text-gray-500" />
                 <div className="flex-1">
-                  <span className="font-medium text-gray-900">Subscription</span>
-                  <p className="text-sm text-gray-500">Free Plan</p>
+                  <span className="font-medium text-gray-900">Billing & Subscription</span>
+                  <p className="text-sm text-gray-500">Manage your plan</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400" />
-              </button>
+              </Link>
             </div>
           </>
         )}

@@ -106,4 +106,107 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_tender", ["tenderId"])
     .index("by_status", ["status"]),
+
+  // Subscriptions - tracks active plans
+  subscriptions: defineTable({
+    userId: v.id("users"),
+    plan: v.union(v.literal("starter"), v.literal("pro"), v.literal("enterprise")),
+    status: v.union(v.literal("active"), v.literal("cancelled"), v.literal("expired"), v.literal("past_due")),
+    
+    // Paystack fields
+    paystackCustomerId: v.optional(v.string()),
+    paystackSubscriptionCode: v.optional(v.string()),
+    paystackPlanCode: v.optional(v.string()),
+    paystackAuthorizationCode: v.optional(v.string()),
+    
+    // Billing
+    amountNaira: v.number(), // Amount in Naira
+    billingCycle: v.union(v.literal("monthly"), v.literal("yearly")),
+    
+    // Dates
+    currentPeriodStart: v.number(),
+    currentPeriodEnd: v.number(),
+    cancelledAt: v.optional(v.number()),
+    
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"])
+    .index("by_paystack_subscription", ["paystackSubscriptionCode"]),
+
+  // Usage tracking - alerts and proposals used this period
+  usage: defineTable({
+    userId: v.id("users"),
+    subscriptionId: v.optional(v.id("subscriptions")),
+    
+    // Period
+    periodStart: v.number(),
+    periodEnd: v.number(),
+    
+    // Limits based on plan
+    alertsLimit: v.number(),
+    proposalsLimit: v.number(),
+    
+    // Usage counts
+    alertsUsed: v.number(),
+    proposalsUsed: v.number(),
+    
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_period", ["userId", "periodStart"]),
+
+  // Transactions - payment history
+  transactions: defineTable({
+    userId: v.id("users"),
+    subscriptionId: v.optional(v.id("subscriptions")),
+    
+    // Transaction details
+    type: v.union(v.literal("subscription"), v.literal("one_time"), v.literal("refund")),
+    status: v.union(v.literal("pending"), v.literal("success"), v.literal("failed"), v.literal("refunded")),
+    
+    // Amounts
+    amountNaira: v.number(),
+    currency: v.string(), // NGN
+    
+    // Paystack fields
+    paystackReference: v.string(),
+    paystackTransactionId: v.optional(v.number()),
+    paystackChannel: v.optional(v.string()), // card, bank, ussd, etc.
+    
+    // Card details (masked)
+    cardLast4: v.optional(v.string()),
+    cardBrand: v.optional(v.string()),
+    
+    // Description
+    description: v.string(),
+    
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_subscription", ["subscriptionId"])
+    .index("by_reference", ["paystackReference"])
+    .index("by_status", ["status"]),
+
+  // Credits - for one-time purchases or bonuses
+  credits: defineTable({
+    userId: v.id("users"),
+    
+    // Credit balances
+    alertCredits: v.number(),
+    proposalCredits: v.number(),
+    
+    // Track where credits came from
+    source: v.union(v.literal("purchase"), v.literal("bonus"), v.literal("referral"), v.literal("promo")),
+    transactionId: v.optional(v.id("transactions")),
+    
+    // Expiry (optional)
+    expiresAt: v.optional(v.number()),
+    
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_expiry", ["expiresAt"]),
 });

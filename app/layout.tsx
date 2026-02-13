@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import { ConvexClientProvider } from '@/components/ConvexClientProvider'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -18,7 +19,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen font-sans">
-        {children}
+        <ConvexClientProvider>
+          {children}
+        </ConvexClientProvider>
       </body>
     </html>
   )

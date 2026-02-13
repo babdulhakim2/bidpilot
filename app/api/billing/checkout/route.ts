@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // Get the callback URL
     const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL;
-    const callbackUrl = `${origin}/dashboard?payment=success`;
+    const callbackUrl = `${origin}/billing?payment=success`;
 
     // Initialize Paystack transaction
     const result = await convex.action(api.billing.paystack.initializeTransaction, {

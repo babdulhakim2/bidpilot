@@ -154,6 +154,85 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section className="py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="font-display text-3xl font-bold text-gray-900 mb-3">
+              Simple pricing
+            </h2>
+            <p className="text-gray-500">Choose the plan that fits your business</p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Starter */}
+            <div className="rounded-2xl border border-gray-200 p-8 bg-white">
+              <div className="text-sm font-semibold text-primary-600 mb-2">Starter</div>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="font-display text-4xl font-bold text-gray-900">₦20k</span>
+                <span className="text-gray-500">/month</span>
+              </div>
+              <p className="text-sm text-gray-500 mb-6">For individual contractors</p>
+              <ul className="space-y-3 mb-8">
+                {['15 tender alerts/month', '3 AI proposals/month', 'Document Vault', 'Email support'].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-primary-600 flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/sign-up" className="block w-full py-3 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition">
+                Get Started
+              </Link>
+            </div>
+
+            {/* Pro */}
+            <div className="rounded-2xl bg-primary-600 p-8 text-white relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-accent-500 text-white text-xs font-bold rounded-full">
+                POPULAR
+              </div>
+              <div className="text-sm font-semibold text-primary-200 mb-2">Pro</div>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="font-display text-4xl font-bold">₦50k</span>
+                <span className="text-primary-200">/month</span>
+              </div>
+              <p className="text-sm text-primary-100 mb-6">For growing businesses</p>
+              <ul className="space-y-3 mb-8">
+                {['100 tender alerts/month', '10 AI proposals/month', 'Qualification matching', 'Priority support'].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-primary-200 flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/sign-up" className="block w-full py-3 text-center bg-white hover:bg-gray-100 text-primary-600 font-semibold rounded-xl transition">
+                Get Started
+              </Link>
+            </div>
+
+            {/* Enterprise */}
+            <div className="rounded-2xl border border-gray-200 p-8 bg-white">
+              <div className="text-sm font-semibold text-primary-600 mb-2">Enterprise</div>
+              <div className="flex items-baseline gap-1 mb-1">
+                <span className="font-display text-4xl font-bold text-gray-900">Custom</span>
+              </div>
+              <p className="text-sm text-gray-500 mb-6">For large contractors</p>
+              <ul className="space-y-3 mb-8">
+                {['Unlimited alerts', 'Unlimited proposals', 'API access', 'Dedicated account manager'].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-sm text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-primary-600 flex-shrink-0" />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/sign-up" className="block w-full py-3 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition">
+                Contact Sales
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="py-24 px-6">
         <div className="max-w-2xl mx-auto text-center">

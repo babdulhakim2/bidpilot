@@ -13,7 +13,7 @@ import {
   Settings, CreditCard, HelpCircle, LogOut, Trash2, Upload,
   Check, Loader2, Send, Download, Package, File, ChevronRight,
   ClipboardList, Building2, MapPin, ExternalLink, Bookmark, Sparkles, X,
-  Pencil, Save
+  Pencil, Save, Zap, AlertTriangle
 } from 'lucide-react';
 import UploadModal from '@/components/UploadModal';
 
@@ -63,6 +63,7 @@ export default function Dashboard() {
   const tenders = useQuery(api.tenders.list) ?? [];
   const documents = useQuery(api.documents.listByUser, userId ? { userId } : 'skip') ?? [];
   const proposals = useQuery(api.proposals.listByUser, userId ? { userId } : 'skip') ?? [];
+  const subscription = useQuery(api.billing.subscriptions.getMine);
 
   // Mutations
   const createProposal = useMutation(api.proposals.create);
@@ -275,6 +276,77 @@ export default function Dashboard() {
                 );
               })}
             </div>
+
+            {/* Usage Card */}
+            {subscription && (
+              <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-8">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-primary-600" />
+                    <span className="font-semibold text-gray-900 capitalize">{subscription.plan} Plan</span>
+                  </div>
+                  <Link href="/billing" className="text-sm text-primary-600 font-medium hover:text-primary-700">
+                    {subscription.plan === 'free' ? 'Upgrade' : 'Manage'}
+                  </Link>
+                </div>
+                {subscription.usage && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">Alerts</span>
+                        <span className="text-xs font-medium text-gray-700">
+                          {subscription.usage.alertsUsed}/{subscription.usage.alertsLimit === -1 ? '∞' : subscription.usage.alertsLimit}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all ${
+                            subscription.usage.alertsLimit !== -1 && 
+                            subscription.usage.alertsUsed >= subscription.usage.alertsLimit 
+                              ? 'bg-red-500' 
+                              : 'bg-primary-500'
+                          }`}
+                          style={{ 
+                            width: subscription.usage.alertsLimit === -1 
+                              ? '10%' 
+                              : `${Math.min(100, (subscription.usage.alertsUsed / subscription.usage.alertsLimit) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-gray-500">Proposals</span>
+                        <span className="text-xs font-medium text-gray-700">
+                          {subscription.usage.proposalsUsed}/{subscription.usage.proposalsLimit === -1 ? '∞' : subscription.usage.proposalsLimit}
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all ${
+                            subscription.usage.proposalsLimit !== -1 && 
+                            subscription.usage.proposalsUsed >= subscription.usage.proposalsLimit 
+                              ? 'bg-red-500' 
+                              : 'bg-primary-500'
+                          }`}
+                          style={{ 
+                            width: subscription.usage.proposalsLimit === -1 
+                              ? '10%' 
+                              : `${Math.min(100, (subscription.usage.proposalsUsed / subscription.usage.proposalsLimit) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {subscription.plan !== 'free' && subscription.status === 'cancelled' && subscription.currentPeriodEnd && (
+                  <div className="mt-3 flex items-center gap-2 text-amber-600 text-sm">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Ends {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* High-Match Opportunities */}
             <section className="mb-8">

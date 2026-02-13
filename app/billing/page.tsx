@@ -38,6 +38,8 @@ function BillingContent() {
   const { user } = useUser();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   // Get subscription data
   const subscription = useQuery(api.billing.subscriptions.getMine);
@@ -105,12 +107,14 @@ function BillingContent() {
   };
 
   const handleCancel = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription?')) return;
-
+    setCancelling(true);
     try {
       await cancelSubscription();
+      setShowCancelModal(false);
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -198,11 +202,19 @@ function BillingContent() {
 
               {subscription?.status === 'active' && (
                 <button
-                  onClick={handleCancel}
+                  onClick={() => setShowCancelModal(true)}
                   className="text-sm text-red-600 hover:text-red-700 font-medium"
                 >
                   Cancel subscription
                 </button>
+              )}
+              
+              {subscription?.status === 'cancelled' && subscription?.currentPeriodEnd && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                  <p className="text-sm text-amber-800">
+                    <strong>Subscription cancelled.</strong> You'll have access until {formatDate(subscription.currentPeriodEnd)}.
+                  </p>
+                </div>
               )}
             </div>
           )}
@@ -364,6 +376,46 @@ function BillingContent() {
           )}
         </section>
       </main>
+
+      {/* Cancel Subscription Modal */}
+      {showCancelModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowCancelModal(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-6 h-6 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Cancel Subscription?</h3>
+              <p className="text-gray-600 text-sm">
+                You'll keep access until <strong>{subscription?.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : 'end of billing period'}</strong>. 
+                After that, you'll be on the free plan (5 alerts, 1 proposal/month).
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition"
+              >
+                Keep Plan
+              </button>
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="flex-1 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

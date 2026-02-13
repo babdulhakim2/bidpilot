@@ -40,15 +40,16 @@ export const getMine = query({
         alerts: planLimits.alerts,
         proposals: planLimits.proposals,
       },
-      usage: await getCurrentUsage(ctx, user._id),
+      usage: await getCurrentUsage(ctx, user._id, subscription),
     };
   },
 });
 
 // Get user's current usage for this period
-async function getCurrentUsage(ctx: any, userId: any) {
+async function getCurrentUsage(ctx: any, userId: any, subscription?: any) {
   const now = Date.now();
   
+  // First try to get usage record for current period
   const usage = await ctx.db
     .query("usage")
     .withIndex("by_user", (q: any) => q.eq("userId", userId))
@@ -59,6 +60,17 @@ async function getCurrentUsage(ctx: any, userId: any) {
       )
     )
     .first();
+
+  // If we have a subscription but no usage record, create one
+  if (!usage && subscription && subscription.status === "active") {
+    const planLimits = PLANS[subscription.plan as keyof typeof PLANS];
+    return {
+      alertsUsed: 0,
+      proposalsUsed: 0,
+      alertsLimit: planLimits?.alerts ?? 5,
+      proposalsLimit: planLimits?.proposals ?? 1,
+    };
+  }
 
   if (!usage) {
     return {

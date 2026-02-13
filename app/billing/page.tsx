@@ -49,14 +49,19 @@ function BillingContent() {
   // Check for payment success
   useEffect(() => {
     const payment = searchParams.get('payment');
-    const reference = searchParams.get('reference');
+    // Paystack appends 'reference' or 'trxref' to callback URL
+    const reference = searchParams.get('reference') || searchParams.get('trxref');
     
     if (payment === 'success' && reference) {
       verifyPayment(reference);
     }
   }, [searchParams]);
 
+  const [verifying, setVerifying] = useState(false);
+  const [success, setSuccess] = useState(false);
+
   const verifyPayment = async (reference: string) => {
+    setVerifying(true);
     try {
       const res = await fetch('/api/billing/verify', {
         method: 'POST',
@@ -65,11 +70,20 @@ function BillingContent() {
       });
       
       if (res.ok) {
-        // Payment verified - subscription should be active
-        router.replace('/billing');
+        // Payment verified - show success and refresh data
+        setSuccess(true);
+        setTimeout(() => {
+          router.replace('/billing');
+        }, 2000);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Payment verification failed');
       }
     } catch (e) {
       console.error('Payment verification error:', e);
+      setError('Failed to verify payment');
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -145,6 +159,20 @@ function BillingContent() {
       <main className="max-w-4xl mx-auto px-6 py-8">
         <h1 className="font-display text-3xl font-bold text-gray-900 mb-2">Billing & Subscription</h1>
         <p className="text-gray-500 mb-8">Manage your plan and payment methods</p>
+
+        {verifying && (
+          <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-xl flex items-center gap-3 text-primary-700">
+            <Loader2 className="w-5 h-5 flex-shrink-0 animate-spin" />
+            <p>Verifying payment...</p>
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-emerald-700">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <p><strong>Payment successful!</strong> Your subscription is now active.</p>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">

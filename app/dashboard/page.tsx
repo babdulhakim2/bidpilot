@@ -1,25 +1,23 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useCurrentUser } from '@/hooks/useUser';
 import { useStore, formatNaira, daysUntil, toTitleCase } from '@/lib/store';
 import { 
-  Target, Calendar, Pin, FolderOpen, ChevronRight, Zap,
-  Check, Loader2, AlertTriangle, ExternalLink
+  Target, Calendar, Pin, ChevronRight, Zap,
+  Loader2, AlertTriangle, ExternalLink
 } from 'lucide-react';
-import UploadModal from '@/components/UploadModal';
 import TenderModal from '@/components/TenderModal';
+import TenderInput from '@/components/TenderInput';
 
 export default function DashboardHome() {
-  const { user, userId, isLoaded } = useCurrentUser();
-  const { showUploadModal, setShowUploadModal, selectedTenderId, setSelectedTenderId } = useStore();
+  const { user, isLoaded } = useCurrentUser();
+  const { selectedTenderId, setSelectedTenderId } = useStore();
 
   // Fetch data
   const tenders = useQuery(api.tenders.list) ?? [];
-  const documents = useQuery(api.documents.listByUser, userId ? { userId } : 'skip') ?? [];
   const subscription = useQuery(api.billing.subscriptions.getMine);
 
   const selectedTender = tenders.find((t: any) => t._id === selectedTenderId);
@@ -198,44 +196,12 @@ export default function DashboardHome() {
         </div>
       </section>
 
-      {/* Document Vault Summary */}
+      {/* Tender Analysis Input */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-bold text-gray-900 flex items-center gap-2">
-            <FolderOpen className="w-5 h-5 text-primary-600" /> Document Vault
-          </h2>
-          <Link href="/dashboard/vault" className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1">
-            Manage <ChevronRight className="w-4 h-4" />
-          </Link>
-        </div>
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-gray-700">Profile Completeness</span>
-                <span className="text-sm font-bold text-primary-600">{profile.completeness}%</span>
-              </div>
-              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-primary-500 rounded-full transition-all duration-500" style={{ width: `${profile.completeness}%` }}></div>
-              </div>
-            </div>
-            <button 
-              onClick={() => setShowUploadModal(true)}
-              className="px-4 py-2 bg-primary-50 text-primary-600 text-sm font-semibold rounded-xl hover:bg-primary-100 transition"
-            >
-              Upload
-            </button>
-          </div>
-          {documents.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">No documents uploaded yet</p>
-          ) : (
-            <p className="text-sm text-gray-600">{documents.length} documents uploaded</p>
-          )}
-        </div>
+        <TenderInput />
       </section>
 
-      {/* Modals */}
-      <UploadModal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} />
+      {/* Tender Detail Modal */}
       {selectedTender && (
         <TenderModal 
           tender={selectedTender} 

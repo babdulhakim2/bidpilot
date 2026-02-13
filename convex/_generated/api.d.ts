@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as analysis_matchTender from "../analysis/matchTender.js";
 import type * as billing_helpers from "../billing/helpers.js";
 import type * as billing_paystack from "../billing/paystack.js";
 import type * as billing_subscriptions from "../billing/subscriptions.js";
@@ -33,6 +34,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "analysis/matchTender": typeof analysis_matchTender;
   "billing/helpers": typeof billing_helpers;
   "billing/paystack": typeof billing_paystack;
   "billing/subscriptions": typeof billing_subscriptions;

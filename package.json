@@ -12,6 +12,8 @@
     "convex:seed": "convex run seed:seedTenders"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.60.0",
+    "@clerk/nextjs": "^6.37.3",
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

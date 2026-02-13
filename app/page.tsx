@@ -2,9 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs';
 
 export default function LandingPage() {
   const [email, setEmail] = useState('');
+  const { isSignedIn } = useAuth();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
@@ -19,12 +21,19 @@ export default function LandingPage() {
               <span className="font-display font-bold text-xl text-gray-900">BidPilot</span>
             </div>
             <div className="flex items-center gap-3">
-              <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition px-3 py-2">
-                Log in
-              </Link>
-              <Link href="/dashboard" className="text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 transition px-4 py-2 rounded-lg shadow-lg shadow-primary-500/20">
-                Get Started
-              </Link>
+              <SignedOut>
+                <Link href="/sign-in" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition px-3 py-2">
+                  Log in
+                </Link>
+                <Link href="/sign-up" className="text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 transition px-4 py-2 rounded-lg shadow-lg shadow-primary-500/20">
+                  Get Started
+                </Link>
+              </SignedOut>
+              <SignedIn>
+                <Link href="/dashboard" className="text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 transition px-4 py-2 rounded-lg shadow-lg shadow-primary-500/20">
+                  Dashboard
+                </Link>
+              </SignedIn>
             </div>
           </div>
         </div>

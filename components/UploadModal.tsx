@@ -1,123 +1,200 @@
 'use client';
 
-import { useState } from 'react';
-import { useStore } from '@/lib/store';
-import { FolderOpen, FileText, X, Upload } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { useMutation, useAction } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+import { X, Upload, FileText, Loader2, Check } from 'lucide-react';
 
-export default function UploadModal() {
-  const { showUploadModal, setShowUploadModal, uploadDocument } = useStore();
-  const [fileName, setFileName] = useState('');
+interface UploadModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const CATEGORIES = [
+  'Registration',
+  'Tax',
+  'Profile',
+  'Experience',
+  'Certificates',
+  'Financial',
+  'Other',
+];
+
+export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
+  const [file, setFile] = useState<File | null>(null);
   const [category, setCategory] = useState('Registration');
-  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (!showUploadModal) return null;
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
+  const createDocument = useMutation(api.documents.createMine);
+  const triggerExtraction = useAction(api.extraction.gemini.triggerExtraction);
 
-  const handleUpload = () => {
-    if (!fileName) return;
-    uploadDocument(fileName.endsWith('.pdf') ? fileName : fileName + '.pdf', category);
-    setFileName('');
-    setCategory('Registration');
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setSuccess(false);
+    }
   };
 
-  const simulateFileSelect = () => {
-    const mockFiles = [
-      'PENCOM Certificate.pdf',
-      'ITF Compliance.pdf',
-      'Audited Financial Statement 2025.pdf',
-      'NSITF Certificate.pdf',
-      'Bank Reference Letter.pdf',
-    ];
-    const randomFile = mockFiles[Math.floor(Math.random() * mockFiles.length)];
-    setFileName(randomFile);
+  const handleUpload = async () => {
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      // Get upload URL from Convex
+      const uploadUrl = await generateUploadUrl();
+
+      // Upload file to Convex storage
+      const result = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+
+      if (!result.ok) {
+        throw new Error('Upload failed');
+      }
+
+      const { storageId } = await result.json();
+
+      // Create document record
+      const documentId = await createDocument({
+        name: file.name,
+        type: file.name.split('.').pop() || 'pdf',
+        category,
+        size: formatFileSize(file.size),
+        storageId,
+      });
+
+      // Trigger LLM extraction pipeline
+      try {
+        await triggerExtraction({ documentId });
+      } catch (e) {
+        console.error('Extraction trigger failed:', e);
+        // Continue anyway - document is uploaded
+      }
+
+      setSuccess(true);
+      setFile(null);
+      
+      // Close after short delay
+      setTimeout(() => {
+        onClose();
+        setSuccess(false);
+      }, 1500);
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div 
+        className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-display font-bold text-lg text-gray-900">Upload Document</h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Upload Document</h2>
           <button 
-            onClick={() => setShowUploadModal(false)}
-            className="p-2 hover:bg-gray-100 rounded-xl transition text-gray-500"
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-5">
-          {/* Drop Zone */}
-          <div 
-            onClick={simulateFileSelect}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(e) => { e.preventDefault(); setIsDragging(false); simulateFileSelect(); }}
-            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition ${
-              isDragging ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
-            }`}
+        {/* Category Selection */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Document Category
+          </label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
           >
-            <div className="flex justify-center mb-3">
-              <FolderOpen className="w-10 h-10 text-gray-400" />
-            </div>
-            <p className="font-medium text-gray-900 mb-1">
-              {fileName || 'Click or drag to upload'}
-            </p>
-            <p className="text-sm text-gray-500">PDF, DOC, ZIP up to 25MB</p>
-          </div>
+            {CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
 
-          {fileName && (
-            <div className="mt-4 p-3 bg-primary-50 rounded-xl flex items-center gap-3">
-              <FileText className="w-6 h-6 text-primary-600" />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 truncate">{fileName}</p>
-                <p className="text-xs text-gray-500">Ready to upload</p>
-              </div>
-              <button 
-                onClick={() => setFileName('')}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        {/* File Drop Zone */}
+        <div 
+          className={`border-2 border-dashed rounded-xl p-8 text-center transition cursor-pointer ${
+            file 
+              ? 'border-primary-500 bg-primary-50' 
+              : 'border-gray-200 hover:border-primary-300 hover:bg-gray-50'
+          }`}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.zip,.jpg,.jpeg,.png"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          
+          {file ? (
+            <div className="flex flex-col items-center">
+              <FileText className="w-12 h-12 text-primary-500 mb-3" />
+              <p className="font-medium text-gray-900">{file.name}</p>
+              <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center">
+              <Upload className="w-12 h-12 text-gray-300 mb-3" />
+              <p className="font-medium text-gray-900">Click to select file</p>
+              <p className="text-sm text-gray-500">PDF, DOC, ZIP, JPG up to 10MB</p>
             </div>
           )}
-
-          {/* Category Select */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Document Category</label>
-            <select 
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-            >
-              <option value="Registration">Registration (CAC, BN)</option>
-              <option value="Tax">Tax (TCC, VAT)</option>
-              <option value="Compliance">Compliance (PENCOM, ITF, NSITF)</option>
-              <option value="Financial">Financial Statements</option>
-              <option value="Experience">Past Contracts & Experience</option>
-              <option value="Profile">Company Profile</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          {/* Actions */}
-          <div className="mt-6 flex gap-3">
-            <button 
-              onClick={() => setShowUploadModal(false)}
-              className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition"
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={handleUpload}
-              disabled={!fileName}
-              className="flex-1 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              Upload
-            </button>
-          </div>
         </div>
+
+        {/* Upload Button */}
+        <button
+          onClick={handleUpload}
+          disabled={!file || uploading}
+          className={`w-full mt-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition ${
+            !file || uploading
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : success
+              ? 'bg-emerald-500 text-white'
+              : 'bg-primary-600 text-white hover:bg-primary-700'
+          }`}
+        >
+          {uploading ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Uploading...
+            </>
+          ) : success ? (
+            <>
+              <Check className="w-5 h-5" />
+              Uploaded!
+            </>
+          ) : (
+            <>
+              <Upload className="w-5 h-5" />
+              Upload Document
+            </>
+          )}
+        </button>
       </div>
     </div>
   );

@@ -1,7 +1,23 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { requireUser, getUser } from "./lib/auth";
 
-// Get all proposals for a user
+// Get all proposals for current authenticated user
+export const listMine = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getUser(ctx);
+    if (!user) return [];
+    
+    return await ctx.db
+      .query("proposals")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .collect();
+  },
+});
+
+// Get all proposals for a user (by ID)
 export const listByUser = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -32,7 +48,29 @@ export const byTender = query({
   },
 });
 
-// Create a new proposal (draft)
+// Create a new proposal for current user
+export const createMine = mutation({
+  args: {
+    tenderId: v.id("tenders"),
+    tenderTitle: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const now = Date.now();
+    
+    return await ctx.db.insert("proposals", {
+      userId: user._id,
+      tenderId: args.tenderId,
+      tenderTitle: args.tenderTitle,
+      status: "draft",
+      sections: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+// Create a new proposal (legacy - with explicit userId)
 export const create = mutation({
   args: {
     userId: v.id("users"),
@@ -51,20 +89,19 @@ export const create = mutation({
   },
 });
 
-// Generate proposal content (simulated AI generation)
+// Generate proposal content (with ownership check)
 export const generate = mutation({
   args: { id: v.id("proposals") },
   handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
     const proposal = await ctx.db.get(args.id);
+    
     if (!proposal) throw new Error("Proposal not found");
+    if (proposal.userId !== user._id) throw new Error("Not authorized");
 
     // Get tender details
     const tender = await ctx.db.get(proposal.tenderId);
     if (!tender) throw new Error("Tender not found");
-
-    // Get user details
-    const user = await ctx.db.get(proposal.userId);
-    if (!user) throw new Error("User not found");
 
     // Simulated generated sections
     const sections = [
@@ -108,7 +145,31 @@ Budget: ₦${tender.budget.toLocaleString()}
   },
 });
 
-// Update proposal
+// Update proposal (with ownership check)
+export const updateMine = mutation({
+  args: {
+    id: v.id("proposals"),
+    content: v.optional(v.string()),
+    sections: v.optional(v.array(v.string())),
+    status: v.optional(v.union(v.literal("draft"), v.literal("generated"), v.literal("submitted"))),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const proposal = await ctx.db.get(args.id);
+    
+    if (!proposal) throw new Error("Proposal not found");
+    if (proposal.userId !== user._id) throw new Error("Not authorized");
+    
+    const { id, ...updates } = args;
+    const filtered = Object.fromEntries(
+      Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+    await ctx.db.patch(id, { ...filtered, updatedAt: Date.now() });
+    return await ctx.db.get(id);
+  },
+});
+
+// Update proposal (legacy)
 export const update = mutation({
   args: {
     id: v.id("proposals"),
@@ -126,10 +187,16 @@ export const update = mutation({
   },
 });
 
-// Submit proposal
+// Submit proposal (with ownership check)
 export const submit = mutation({
   args: { id: v.id("proposals") },
   handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const proposal = await ctx.db.get(args.id);
+    
+    if (!proposal) throw new Error("Proposal not found");
+    if (proposal.userId !== user._id) throw new Error("Not authorized");
+    
     await ctx.db.patch(args.id, {
       status: "submitted",
       updatedAt: Date.now(),
@@ -138,7 +205,26 @@ export const submit = mutation({
   },
 });
 
-// Delete proposal
+// Delete proposal (with ownership check)
+export const removeMine = mutation({
+  args: { id: v.id("proposals") },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const proposal = await ctx.db.get(args.id);
+    
+    if (!proposal) throw new Error("Proposal not found");
+    if (proposal.userId !== user._id) throw new Error("Not authorized");
+    
+    // Delete PDF from storage if exists
+    if (proposal.storageId) {
+      await ctx.storage.delete(proposal.storageId);
+    }
+    
+    await ctx.db.delete(args.id);
+  },
+});
+
+// Delete proposal (legacy)
 export const remove = mutation({
   args: { id: v.id("proposals") },
   handler: async (ctx, args) => {

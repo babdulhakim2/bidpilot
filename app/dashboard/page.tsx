@@ -1,18 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth, UserButton } from '@clerk/nextjs';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useCurrentUser } from '@/hooks/useUser';
+import { useStore } from '@/lib/store';
 import { Id } from '@/convex/_generated/dataModel';
-import BottomNav from '@/components/BottomNav';
 import { 
   Bell, Target, Calendar, Wallet, Pin, FolderOpen, FileText, 
   Settings, CreditCard, HelpCircle, LogOut, Trash2, Upload,
   Check, Loader2, Send, Download, Package, File, ChevronRight,
-  ClipboardList, Building2, MapPin, ExternalLink, Bookmark, Sparkles
+  ClipboardList, Building2, MapPin, ExternalLink, Bookmark, Sparkles, X
 } from 'lucide-react';
+import UploadModal from '@/components/UploadModal';
 
 // Helper functions
 const formatNaira = (amount: number) => '₦' + amount.toLocaleString();
@@ -21,13 +22,32 @@ const daysUntil = (dateStr: string) => {
   return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 };
 
+// Normalize ALL CAPS text to Title Case
+const toTitleCase = (str: string) => {
+  if (!str) return str;
+  // If mostly uppercase, convert to title case
+  const upperCount = (str.match(/[A-Z]/g) || []).length;
+  const letterCount = (str.match(/[a-zA-Z]/g) || []).length;
+  if (letterCount > 0 && upperCount / letterCount > 0.6) {
+    return str
+      .toLowerCase()
+      .replace(/(?:^|\s|[-/])\w/g, (match) => match.toUpperCase());
+  }
+  return str;
+};
+
 export default function Dashboard() {
   const { isSignedIn } = useAuth();
   const { user, userId, isLoaded } = useCurrentUser();
-  const [activeTab, setActiveTab] = useState<'home' | 'tenders' | 'vault' | 'proposals' | 'profile'>('home');
+  const { activeTab, setActiveTab } = useStore();
   const [selectedTender, setSelectedTender] = useState<any>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
+
+  // Close modal when switching tabs
+  useEffect(() => {
+    setSelectedTender(null);
+  }, [activeTab]);
 
   // Fetch data from Convex
   const tenders = useQuery(api.tenders.list) ?? [];
@@ -49,10 +69,10 @@ export default function Dashboard() {
   }
 
   // Filter tenders
-  const filteredTenders = selectedCategory === 'All' 
+  const filteredOpportunities = selectedCategory === 'All' 
     ? tenders 
-    : tenders.filter(t => t.category === selectedCategory);
-  const highMatchTenders = tenders.filter(t => (t.matchScore ?? 80) >= 70);
+    : tenders.filter((t: any) => t.category === selectedCategory);
+  const highMatchOpportunities = tenders.filter((t: any) => (t.matchScore ?? 80) >= 70);
 
   // Profile data (from Convex user or defaults)
   const profile = {
@@ -95,35 +115,52 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen overflow-x-hidden">
       {/* Tender Detail Modal */}
       {selectedTender && (
-        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setSelectedTender(null)}>
+        <div 
+          className="fixed inset-0 z-50 bg-black/50 overflow-hidden"
+          onClick={() => setSelectedTender(null)}
+        >
           <div 
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[90vh] overflow-y-auto"
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85vh] overflow-y-auto overscroll-contain"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
-              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4" />
+            <div className="sticky top-0 bg-white pt-4 pb-2 px-6 border-b border-gray-100 z-10">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-1 bg-gray-300 rounded-full" />
+                <button 
+                  onClick={() => setSelectedTender(null)}
+                  className="p-2 -mr-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 pt-4 pb-24 lg:pb-6">
               <div className="flex items-start justify-between mb-4">
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedTender.status)}`}>
                   {selectedTender.status === 'qualified' ? '✓ Qualified' : 
                    selectedTender.status === 'partial' ? '⚠ Partial Match' : '✗ Low Match'}
                 </span>
-                <span className="text-sm text-gray-500">{daysUntil(selectedTender.deadline)} days left</span>
+                {daysUntil(selectedTender.deadline) > 0 && (
+                  <span className="text-sm text-gray-500">{daysUntil(selectedTender.deadline)} days left</span>
+                )}
               </div>
-              <h2 className="font-display text-xl font-bold text-gray-900 mb-2">{selectedTender.title}</h2>
+              <h2 className="font-display text-xl font-bold text-gray-900 mb-2">{toTitleCase(selectedTender.title)}</h2>
               <div className="flex items-center gap-2 text-gray-600 mb-4">
                 <Building2 className="w-4 h-4" />
-                <span className="text-sm">{selectedTender.organization}</span>
+                <span className="text-sm">{toTitleCase(selectedTender.organization)}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-600 mb-4">
                 <MapPin className="w-4 h-4" />
                 <span className="text-sm">{selectedTender.location}</span>
               </div>
-              <div className="font-display text-2xl font-bold text-primary-600 mb-4">
-                {formatNaira(selectedTender.budget)}
-              </div>
+              {selectedTender.budget > 0 && (
+                <div className="font-display text-2xl font-bold text-primary-600 mb-4">
+                  {formatNaira(selectedTender.budget)}
+                </div>
+              )}
               <p className="text-gray-600 mb-6">{selectedTender.description}</p>
               
               <h3 className="font-semibold text-gray-900 mb-2">Requirements</h3>
@@ -158,8 +195,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Top Nav */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
+      {/* Top Nav - mobile/tablet only */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-40 lg:hidden">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-2">
@@ -188,26 +225,26 @@ export default function Dashboard() {
                 Good morning, {profile.companyName.split(' ')[0]}
               </h1>
               <p className="text-gray-600 mt-1">
-                You have {highMatchTenders.length} high-match opportunities
+                You have {highMatchOpportunities.length} high-match opportunities
               </p>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8">
               {[
                 { label: 'Matches', value: tenders.length.toString(), sublabel: 'available', icon: Target, color: 'bg-primary-50 text-primary-700' },
-                { label: 'Deadlines', value: tenders.filter(t => daysUntil(t.deadline) <= 7).length.toString(), sublabel: 'this week', icon: Calendar, color: 'bg-amber-50 text-amber-700' },
-                { label: 'Value', value: formatNaira(tenders.reduce((sum, t) => sum + t.budget, 0)), sublabel: 'total', icon: Wallet, color: 'bg-emerald-50 text-emerald-700' },
+                { label: 'Deadlines', value: tenders.filter((t: any) => daysUntil(t.deadline) <= 7).length.toString(), sublabel: 'this week', icon: Calendar, color: 'bg-amber-50 text-amber-700' },
+                { label: 'Value', value: `₦${(tenders.reduce((sum: number, t: any) => sum + t.budget, 0) / 1000000).toFixed(0)}M`, sublabel: 'total', icon: Wallet, color: 'bg-emerald-50 text-emerald-700' },
               ].map((stat) => {
                 const Icon = stat.icon;
                 return (
-                  <div key={stat.label} className={`rounded-2xl p-4 sm:p-5 ${stat.color}`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Icon className="w-5 h-5" />
-                      <span className="text-xs font-medium uppercase tracking-wider opacity-80 hidden sm:block">{stat.label}</span>
+                  <div key={stat.label} className={`rounded-2xl p-3 sm:p-5 ${stat.color} overflow-hidden`}>
+                    <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
+                      <Icon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                      <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider opacity-80 hidden sm:block truncate">{stat.label}</span>
                     </div>
-                    <div className="font-display text-xl sm:text-2xl font-bold">{stat.value}</div>
-                    <div className="text-xs opacity-70">{stat.sublabel}</div>
+                    <div className="font-display text-base sm:text-2xl font-bold truncate">{stat.value}</div>
+                    <div className="text-[10px] sm:text-xs opacity-70">{stat.sublabel}</div>
                   </div>
                 );
               })}
@@ -226,24 +263,30 @@ export default function Dashboard() {
                   View All <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-              <div className="space-y-4">
-                {tenders.slice(0, 3).map((tender) => (
+              <div className="space-y-3 sm:space-y-4 w-full">
+                {tenders.slice(0, 3).map((tender: any) => (
                   <div 
                     key={tender._id}
                     onClick={() => setSelectedTender(tender)}
-                    className="bg-white rounded-2xl border border-gray-200 p-4 hover:shadow-lg hover:border-primary-200 transition cursor-pointer"
+                    className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4 active:bg-gray-50 transition-colors cursor-pointer touch-manipulation w-full min-w-0"
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tender.status)}`}>
+                    <div className="flex items-start justify-between mb-2 gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(tender.status)}`}>
                         {tender.category}
                       </span>
-                      <span className="text-sm text-gray-500">{daysUntil(tender.deadline)}d left</span>
+                      {daysUntil(tender.deadline) > 0 && (
+                        <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">{daysUntil(tender.deadline)}d left</span>
+                      )}
                     </div>
-                    <h3 className="font-semibold text-gray-900 mb-1">{tender.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{tender.organization}</p>
+                    <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base line-clamp-2">{toTitleCase(tender.title)}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-2 truncate">{toTitleCase(tender.organization)}</p>
                     <div className="flex items-center justify-between">
-                      <span className="font-display font-bold text-primary-600">{formatNaira(tender.budget)}</span>
-                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                      {tender.budget > 0 ? (
+                        <span className="font-display font-bold text-primary-600 text-sm sm:text-base">{formatNaira(tender.budget)}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Budget TBD</span>
+                      )}
+                      <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
                     </div>
                   </div>
                 ))}
@@ -285,7 +328,7 @@ export default function Dashboard() {
                   <p className="text-sm text-gray-500 text-center py-4">No documents uploaded yet</p>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
-                    {documents.slice(0, 4).map((doc) => (
+                    {documents.slice(0, 4).map((doc: any) => (
                       <div key={doc._id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
                         {getDocIcon(doc.type)}
                         <div className="flex-1 min-w-0">
@@ -310,7 +353,7 @@ export default function Dashboard() {
         {activeTab === 'tenders' && (
           <>
             <div className="mb-6">
-              <h1 className="font-display text-2xl font-bold text-gray-900">Browse Tenders</h1>
+              <h1 className="font-display text-2xl font-bold text-gray-900">Browse Opportunities</h1>
               <p className="text-gray-600 mt-1">{tenders.length} opportunities available</p>
             </div>
 
@@ -329,24 +372,30 @@ export default function Dashboard() {
               ))}
             </div>
 
-            <div className="space-y-4">
-              {filteredTenders.map((tender) => (
+            <div className="space-y-3 sm:space-y-4 w-full">
+              {filteredOpportunities.map((tender: any) => (
                 <div 
                   key={tender._id}
                   onClick={() => setSelectedTender(tender)}
-                  className="bg-white rounded-2xl border border-gray-200 p-4 hover:shadow-lg hover:border-primary-200 transition cursor-pointer"
+                  className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4 active:bg-gray-50 transition-colors cursor-pointer touch-manipulation w-full min-w-0"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tender.status)}`}>
+                  <div className="flex items-start justify-between mb-2 gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(tender.status)}`}>
                       {tender.category}
                     </span>
-                    <span className="text-sm text-gray-500">{daysUntil(tender.deadline)}d left</span>
+                    {daysUntil(tender.deadline) > 0 && (
+                      <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">{daysUntil(tender.deadline)}d left</span>
+                    )}
                   </div>
-                  <h3 className="font-semibold text-gray-900 mb-1">{tender.title}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{tender.organization}</p>
+                  <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base line-clamp-2">{toTitleCase(tender.title)}</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 mb-2 truncate">{toTitleCase(tender.organization)}</p>
                   <div className="flex items-center justify-between">
-                    <span className="font-display font-bold text-primary-600">{formatNaira(tender.budget)}</span>
-                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                    {tender.budget > 0 ? (
+                      <span className="font-display font-bold text-primary-600 text-sm sm:text-base">{formatNaira(tender.budget)}</span>
+                    ) : (
+                      <span className="text-xs text-gray-400">Budget TBD</span>
+                    )}
+                    <ChevronRight className="w-5 h-5 text-gray-400 flex-shrink-0" />
                   </div>
                 </div>
               ))}
@@ -397,7 +446,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-3">
-                {documents.map((doc) => (
+                {documents.map((doc: any) => (
                   <div key={doc._id} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
                       {getDocIcon(doc.type)}
@@ -450,12 +499,12 @@ export default function Dashboard() {
                   onClick={() => setActiveTab('tenders')}
                   className="px-6 py-2 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700"
                 >
-                  Browse Tenders
+                  Browse Opportunities
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
-                {proposals.map((proposal) => (
+                {proposals.map((proposal: any) => (
                   <div key={proposal._id} className="bg-white rounded-2xl border border-gray-200 p-5">
                     <div className="flex items-start justify-between mb-4">
                       <div>
@@ -556,33 +605,11 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
-        <div className="flex items-center justify-around h-16">
-          {[
-            { id: 'home' as const, icon: Target, label: 'Home' },
-            { id: 'tenders' as const, icon: FileText, label: 'Tenders' },
-            { id: 'vault' as const, icon: FolderOpen, label: 'Vault' },
-            { id: 'proposals' as const, icon: Send, label: 'Proposals' },
-            { id: 'profile' as const, icon: Settings, label: 'Profile' },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl transition ${
-                  isActive ? 'text-primary-600' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
-                <span className="text-[10px] font-medium">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+      {/* Upload Modal */}
+      <UploadModal 
+        isOpen={showUploadModal} 
+        onClose={() => setShowUploadModal(false)} 
+      />
     </div>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useMutation, useAction } from 'convex/react';
+import { useMutation, useAction, useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { X, Upload, FileText, Loader2, Check } from 'lucide-react';
+import { X, Upload, FileText, Loader2, Check, Lock } from 'lucide-react';
+import UpgradeModal from './UpgradeModal';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -25,11 +26,18 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
   const [category, setCategory] = useState('Registration');
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
   const createDocument = useMutation(api.documents.createMine);
   const triggerExtraction = useAction(api.extraction.gemini.triggerExtraction);
+  const subscription = useQuery(api.billing.subscriptions.getMine);
+  
+  // Free users who have used their proposal cannot upload more docs
+  const isFreeLocked = subscription?.plan === 'free' && 
+    subscription?.usage && 
+    subscription.usage.proposalsUsed >= subscription.usage.proposalsLimit;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -100,6 +108,50 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
   };
 
   if (!isOpen) return null;
+
+  // Show upgrade modal instead if free user is locked
+  if (isFreeLocked) {
+    return (
+      <>
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+          <div 
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-amber-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Upgrade Required</h2>
+            <p className="text-gray-600 mb-6">
+              You've used your free proposal. Upgrade to upload more documents and generate more proposals.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={onClose}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => setShowUpgradeModal(true)}
+                className="flex-1 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700"
+              >
+                Upgrade Now
+              </button>
+            </div>
+          </div>
+        </div>
+        <UpgradeModal 
+          isOpen={showUpgradeModal}
+          onClose={() => {
+            setShowUpgradeModal(false);
+            onClose();
+          }}
+          reason="documents"
+        />
+      </>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>

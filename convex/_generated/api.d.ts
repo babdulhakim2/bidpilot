@@ -21,6 +21,7 @@ import type * as images from "../images.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as proposalGenerate from "../proposalGenerate.js";
 import type * as proposalImages from "../proposalImages.js";
+import type * as proposalPdf from "../proposalPdf.js";
 import type * as proposalPipeline from "../proposalPipeline.js";
 import type * as proposals from "../proposals.js";
 import type * as scraperLogs from "../scraperLogs.js";
@@ -58,6 +59,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   proposalGenerate: typeof proposalGenerate;
   proposalImages: typeof proposalImages;
+  proposalPdf: typeof proposalPdf;
   proposalPipeline: typeof proposalPipeline;
   proposals: typeof proposals;
   scraperLogs: typeof scraperLogs;

@@ -24,6 +24,7 @@ export default function ProposalEditPage() {
     proposal?.tenderId ? { id: proposal.tenderId } : "skip"
   );
   const proposalImages = useQuery(api.proposalImages.listByProposal, { proposalId });
+  const user = useQuery(api.users.me);
   
   const updateProposal = useMutation(api.proposals.update);
   const deleteProposal = useMutation(api.proposals.removeMine);
@@ -165,22 +166,79 @@ export default function ProposalEditPage() {
   };
 
   const handleGeneratePdf = async () => {
-    if (!proposalId || sections.length === 0) return;
+    if (!proposalId || sections.length === 0 || !tender || !user) return;
     setIsGeneratingPdf(true);
     try {
       // Save current content first
       await handleSave();
-      // Generate PDF via Claude
-      const result = await generatePdf({ proposalId });
-      if (result.success) {
-        alert('PDF generated successfully! You can now download it.');
+      
+      // Call PDF generation API directly from browser
+      const response = await fetch('/api/generate-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: {
+            title: tender.title,
+            organization: tender.organization,
+            companyName: user.companyName,
+            budget: tender.budget,
+            deadline: tender.deadline,
+            category: tender.category,
+            sections: sections.map(s => ({
+              id: s.id,
+              title: s.title,
+              content: s.content,
+              imageUrl: s.imageUrl,
+              imagePrompt: s.imagePrompt,
+            })),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate PDF');
       }
+
+      const result = await response.json();
+      
+      if (!result.success || !result.pdf) {
+        throw new Error('No PDF returned');
+      }
+
+      // Convert base64 to blob and trigger download
+      const pdfBlob = base64ToBlob(result.pdf, 'application/pdf');
+      const url = URL.createObjectURL(pdfBlob);
+      
+      // Open in new tab for preview
+      window.open(url, '_blank');
+      
+      // Also offer download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename || 'proposal.pdf';
+      a.click();
+      
+      // Cleanup after delay
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      
     } catch (e: any) {
       console.error('Failed to generate PDF:', e);
       alert(`Failed to generate PDF: ${e.message || 'Unknown error'}`);
     } finally {
       setIsGeneratingPdf(false);
     }
+  };
+  
+  // Helper to convert base64 to blob
+  const base64ToBlob = (base64: string, mimeType: string): Blob => {
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type: mimeType });
   };
 
   const handleDownloadPdf = () => {

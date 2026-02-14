@@ -8,8 +8,7 @@ import { useCurrentUser } from '@/hooks/useUser';
 import { 
   Settings, CreditCard, ChevronRight, Pencil, Save, Loader2, Zap, AlertTriangle, Activity, Clock
 } from 'lucide-react';
-
-const CATEGORIES = ['construction', 'ict', 'consultancy', 'supplies', 'solar', 'professional', 'maintenance', 'logistics', 'education', 'healthcare', 'security', 'electrical'];
+import { CATEGORIES, getCategoryLabel } from '@/lib/categories';
 
 export default function ProfilePage() {
   const { user, isLoaded } = useCurrentUser();
@@ -143,28 +142,28 @@ export default function ProfilePage() {
               <div className="flex flex-wrap gap-2 mt-2">
                 {CATEGORIES.map((cat) => (
                   <button
-                    key={cat}
+                    key={cat.id}
                     type="button"
                     onClick={() => {
                       setEditCategories(prev => 
-                        prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                        prev.includes(cat.id) ? prev.filter(c => c !== cat.id) : [...prev, cat.id]
                       );
                     }}
-                    className={`px-3 py-1.5 text-sm rounded-full transition capitalize ${
-                      editCategories.includes(cat)
+                    className={`px-3 py-1.5 text-sm rounded-full transition ${
+                      editCategories.includes(cat.id)
                         ? 'bg-primary-600 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {cat}
+                    {cat.label}
                   </button>
                 ))}
               </div>
             ) : profile.categories.length > 0 ? (
               <div className="flex flex-wrap gap-2 mt-1">
-                {profile.categories.map((cat) => (
-                  <span key={cat} className="px-3 py-1 bg-primary-50 text-primary-700 text-sm rounded-full capitalize">
-                    {cat}
+                {profile.categories.map((catId: string) => (
+                  <span key={catId} className="px-3 py-1 bg-primary-50 text-primary-700 text-sm rounded-full">
+                    {getCategoryLabel(catId)}
                   </span>
                 ))}
               </div>

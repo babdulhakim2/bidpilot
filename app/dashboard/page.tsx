@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useCurrentUser } from '@/hooks/useUser';
-import { useStore, formatNaira, daysUntil, toTitleCase } from '@/lib/store';
+import { useStore, formatNaira, toTitleCase } from '@/lib/store';
 import { 
   Target, Calendar, Pin, ChevronRight,
   Loader2, ExternalLink
 } from 'lucide-react';
+import { formatDeadline, getDeadlineColor, timeAgo, getDeadlineUrgency } from '@/lib/timeUtils';
+import { getCategoryLabel } from '@/lib/categories';
 import TenderModal from '@/components/TenderModal';
 import TenderInput from '@/components/TenderInput';
 
@@ -35,12 +37,9 @@ export default function DashboardHome() {
     completeness: user?.completeness ?? 25,
   };
 
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'qualified': return 'bg-emerald-100 text-emerald-700';
-      case 'partial': return 'bg-amber-100 text-amber-700';
-      default: return 'bg-red-100 text-red-700';
-    }
+  const daysUntil = (deadline: string) => {
+    const diff = new Date(deadline).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
 
   return (
@@ -88,7 +87,7 @@ export default function DashboardHome() {
             <Pin className="w-5 h-5 text-primary-600" /> Top Opportunities
           </h2>
           <Link href="/dashboard/tenders" className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1">
-            View All <ChevronRight className="w-4 h-4" />
+            Browse All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
         <div className="space-y-3 sm:space-y-4 w-full">
@@ -99,12 +98,22 @@ export default function DashboardHome() {
               className="bg-white rounded-2xl border border-gray-200 p-3 sm:p-4 active:bg-gray-50 transition-colors cursor-pointer touch-manipulation w-full min-w-0"
             >
               <div className="flex items-start justify-between mb-2 gap-2">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(tender.status)}`}>
-                  {tender.category}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Category badge - brand green */}
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700 flex-shrink-0">
+                    {getCategoryLabel(tender.category) || toTitleCase(tender.category)}
+                  </span>
+                  {/* Time added */}
+                  {tender._creationTime && (
+                    <span className="text-[10px] sm:text-xs text-gray-400">
+                      {timeAgo(tender._creationTime)}
+                    </span>
+                  )}
+                </div>
+                {/* Deadline with color */}
+                <span className={`text-xs sm:text-sm font-medium flex-shrink-0 ${getDeadlineColor(tender.deadline)}`}>
+                  {formatDeadline(tender.deadline)}
                 </span>
-                {daysUntil(tender.deadline) > 0 && (
-                  <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">{daysUntil(tender.deadline)}d left</span>
-                )}
               </div>
               <h3 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base line-clamp-2">{toTitleCase(tender.title)}</h3>
               <p className="text-xs sm:text-sm text-gray-600 mb-1 truncate">{toTitleCase(tender.organization)}</p>

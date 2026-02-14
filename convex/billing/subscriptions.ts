@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "../_generated/server";
-import { PLANS } from "./paystack";
+import { PLANS, FREE_LIMITS } from "./paystack";
 
 // Get current user's subscription
 export const getMine = query({
@@ -23,12 +23,12 @@ export const getMine = query({
       .first();
 
     if (!subscription) {
-      // Return free tier info
+      // Return free tier info (lifetime limits, not monthly)
       return {
         plan: "free" as const,
         status: "active" as const,
-        limits: { alerts: 5, proposals: 1 },
-        usage: await getCurrentUsage(ctx, user._id),
+        limits: { analysis: FREE_LIMITS.analysis, proposals: FREE_LIMITS.proposals },
+        usage: await getCurrentUsage(ctx, user._id, null, true),
       };
     }
 
@@ -37,55 +37,66 @@ export const getMine = query({
     return {
       ...subscription,
       limits: {
-        alerts: planLimits.alerts,
+        analysis: planLimits.analysis,
         proposals: planLimits.proposals,
       },
-      usage: await getCurrentUsage(ctx, user._id, subscription),
+      usage: await getCurrentUsage(ctx, user._id, subscription, false),
     };
   },
 });
 
 // Get user's current usage for this period
-async function getCurrentUsage(ctx: any, userId: any, subscription?: any) {
+async function getCurrentUsage(ctx: any, userId: any, subscription: any, isFree: boolean) {
   const now = Date.now();
   
   // Determine limits based on current subscription (always use live plan limits)
-  let alertsLimit = 5;  // Free tier default
-  let proposalsLimit = 1;
+  let analysisLimit = FREE_LIMITS.analysis;  // Free tier default (lifetime)
+  let proposalsLimit = FREE_LIMITS.proposals;
   
   if (subscription && subscription.status === "active") {
     const planLimits = PLANS[subscription.plan as keyof typeof PLANS];
-    alertsLimit = planLimits?.alerts ?? 5;
-    proposalsLimit = planLimits?.proposals ?? 1;
+    analysisLimit = planLimits?.analysis ?? FREE_LIMITS.analysis;
+    proposalsLimit = planLimits?.proposals ?? FREE_LIMITS.proposals;
   }
   
-  // Get usage record for current period
-  const usage = await ctx.db
-    .query("usage")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
-    .filter((q: any) => 
-      q.and(
-        q.lte(q.field("periodStart"), now),
-        q.gte(q.field("periodEnd"), now)
+  // For free users, check lifetime usage (no period filter)
+  // For paid users, check current billing period
+  let usage;
+  if (isFree) {
+    // Get total lifetime usage for free users
+    usage = await ctx.db
+      .query("usage")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .first();
+  } else {
+    // Get usage record for current period
+    usage = await ctx.db
+      .query("usage")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .filter((q: any) => 
+        q.and(
+          q.lte(q.field("periodStart"), now),
+          q.gte(q.field("periodEnd"), now)
+        )
       )
-    )
-    .first();
+      .first();
+  }
 
   if (!usage) {
     // No usage record - return defaults with plan limits
     return {
-      alertsUsed: 0,
+      analysisUsed: 0,
       proposalsUsed: 0,
-      alertsLimit,
+      analysisLimit,
       proposalsLimit,
     };
   }
 
   // Return actual usage but with CURRENT plan limits (in case of upgrade)
   return {
-    alertsUsed: usage.alertsUsed,
+    analysisUsed: usage.analysisUsed ?? usage.alertsUsed ?? 0,
     proposalsUsed: usage.proposalsUsed,
-    alertsLimit,  // Always use current plan limits
+    analysisLimit,  // Always use current plan limits
     proposalsLimit,  // Always use current plan limits
   };
 }
@@ -104,7 +115,14 @@ export const getUsage = query({
 
     if (!user) return null;
 
-    return await getCurrentUsage(ctx, user._id);
+    // Check if user has active subscription
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first();
+
+    return await getCurrentUsage(ctx, user._id, subscription, !subscription);
   },
 });
 
@@ -173,7 +191,7 @@ export const createFromPayment = mutation({
     if (existingUsage) {
       await ctx.db.patch(existingUsage._id, {
         subscriptionId,
-        alertsLimit: planDetails.alerts,
+        analysisLimit: planDetails.analysis,
         proposalsLimit: planDetails.proposals,
         periodEnd, // Extend period to new subscription end
         updatedAt: now,
@@ -184,9 +202,9 @@ export const createFromPayment = mutation({
         subscriptionId,
         periodStart: now,
         periodEnd,
-        alertsLimit: planDetails.alerts,
+        analysisLimit: planDetails.analysis,
         proposalsLimit: planDetails.proposals,
-        alertsUsed: 0,
+        analysisUsed: 0,
         proposalsUsed: 0,
         createdAt: now,
         updatedAt: now,
@@ -245,10 +263,10 @@ export const getTransactions = query({
   },
 });
 
-// Increment usage (called when user uses alerts/proposals)
+// Increment usage (called when user uses analysis/proposals)
 export const incrementUsage = mutation({
   args: {
-    type: v.union(v.literal("alert"), v.literal("proposal")),
+    type: v.union(v.literal("analysis"), v.literal("proposal")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -263,47 +281,87 @@ export const incrementUsage = mutation({
 
     const now = Date.now();
 
-    // Get or create current usage record
-    let usage = await ctx.db
-      .query("usage")
+    // Check if user has active subscription
+    const subscription = await ctx.db
+      .query("subscriptions")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .filter((q) =>
-        q.and(
-          q.lte(q.field("periodStart"), now),
-          q.gte(q.field("periodEnd"), now)
-        )
-      )
+      .filter((q) => q.eq(q.field("status"), "active"))
       .first();
 
-    if (!usage) {
-      // Create free tier usage for this month
-      const periodStart = now;
-      const periodEnd = now + 30 * 24 * 60 * 60 * 1000;
+    const isFree = !subscription;
 
-      const usageId = await ctx.db.insert("usage", {
-        userId: user._id,
-        periodStart,
-        periodEnd,
-        alertsLimit: 5,
-        proposalsLimit: 1,
-        alertsUsed: 0,
-        proposalsUsed: 0,
-        createdAt: now,
-        updatedAt: now,
-      });
+    // Get or create usage record
+    let usage;
+    if (isFree) {
+      // For free users, get/create lifetime usage record
+      usage = await ctx.db
+        .query("usage")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .first();
 
-      usage = await ctx.db.get(usageId);
+      if (!usage) {
+        // Create lifetime usage for free tier
+        const usageId = await ctx.db.insert("usage", {
+          userId: user._id,
+          periodStart: 0, // Epoch - lifetime
+          periodEnd: 9999999999999, // Far future - lifetime
+          analysisLimit: FREE_LIMITS.analysis,
+          proposalsLimit: FREE_LIMITS.proposals,
+          analysisUsed: 0,
+          proposalsUsed: 0,
+          createdAt: now,
+          updatedAt: now,
+        });
+        usage = await ctx.db.get(usageId);
+      }
+    } else {
+      // For paid users, get usage for current billing period
+      usage = await ctx.db
+        .query("usage")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .filter((q) =>
+          q.and(
+            q.lte(q.field("periodStart"), now),
+            q.gte(q.field("periodEnd"), now)
+          )
+        )
+        .first();
+
+      if (!usage) {
+        // Create usage for current period
+        const planLimits = PLANS[subscription.plan as keyof typeof PLANS];
+        const periodStart = now;
+        const periodEnd = now + 30 * 24 * 60 * 60 * 1000;
+
+        const usageId = await ctx.db.insert("usage", {
+          userId: user._id,
+          subscriptionId: subscription._id,
+          periodStart,
+          periodEnd,
+          analysisLimit: planLimits.analysis,
+          proposalsLimit: planLimits.proposals,
+          analysisUsed: 0,
+          proposalsUsed: 0,
+          createdAt: now,
+          updatedAt: now,
+        });
+        usage = await ctx.db.get(usageId);
+      }
     }
 
     if (!usage) throw new Error("Failed to get usage");
 
+    // Get current counts (handle old field name)
+    const analysisUsed = usage.analysisUsed ?? usage.alertsUsed ?? 0;
+    const analysisLimit = usage.analysisLimit ?? usage.alertsLimit ?? FREE_LIMITS.analysis;
+
     // Check limits
-    if (args.type === "alert") {
-      if (usage.alertsLimit !== -1 && usage.alertsUsed >= usage.alertsLimit) {
-        throw new Error("Alert limit reached. Please upgrade your plan.");
+    if (args.type === "analysis") {
+      if (analysisLimit !== -1 && analysisUsed >= analysisLimit) {
+        throw new Error("Analysis limit reached. Please upgrade your plan.");
       }
       await ctx.db.patch(usage._id, {
-        alertsUsed: usage.alertsUsed + 1,
+        analysisUsed: analysisUsed + 1,
         updatedAt: now,
       });
     } else {
@@ -323,7 +381,7 @@ export const incrementUsage = mutation({
 // Check if user can use a feature
 export const canUse = query({
   args: {
-    type: v.union(v.literal("alert"), v.literal("proposal")),
+    type: v.union(v.literal("analysis"), v.literal("proposal")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -336,30 +394,37 @@ export const canUse = query({
 
     if (!user) return { allowed: false, reason: "User not found" };
 
-    const usage = await getCurrentUsage(ctx, user._id);
+    // Check if user has active subscription
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first();
 
-    if (args.type === "alert") {
-      if (usage.alertsLimit === -1) return { allowed: true };
-      if (usage.alertsUsed >= usage.alertsLimit) {
+    const usage = await getCurrentUsage(ctx, user._id, subscription, !subscription);
+
+    if (args.type === "analysis") {
+      if (usage.analysisLimit === -1) return { allowed: true };
+      if (usage.analysisUsed >= usage.analysisLimit) {
         return {
           allowed: false,
-          reason: `You've used all ${usage.alertsLimit} alerts this month`,
-          used: usage.alertsUsed,
-          limit: usage.alertsLimit,
+          reason: `You've used all ${usage.analysisLimit} analysis`,
+          used: usage.analysisUsed,
+          limit: usage.analysisLimit,
         };
       }
       return {
         allowed: true,
-        used: usage.alertsUsed,
-        limit: usage.alertsLimit,
-        remaining: usage.alertsLimit - usage.alertsUsed,
+        used: usage.analysisUsed,
+        limit: usage.analysisLimit,
+        remaining: usage.analysisLimit - usage.analysisUsed,
       };
     } else {
       if (usage.proposalsLimit === -1) return { allowed: true };
       if (usage.proposalsUsed >= usage.proposalsLimit) {
         return {
           allowed: false,
-          reason: `You've used all ${usage.proposalsLimit} proposals this month`,
+          reason: `You've used all ${usage.proposalsLimit} proposals`,
           used: usage.proposalsUsed,
           limit: usage.proposalsLimit,
         };

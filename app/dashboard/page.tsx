@@ -9,7 +9,7 @@ import {
   Target, Calendar, Pin, ChevronRight,
   Loader2, ExternalLink
 } from 'lucide-react';
-import { formatDeadline, getDeadlineColor, timeAgo, getDeadlineUrgency } from '@/lib/timeUtils';
+import { formatDeadline, getDeadlineBgColor, timeAgo } from '@/lib/timeUtils';
 import { getCategoryLabel } from '@/lib/categories';
 import TenderModal from '@/components/TenderModal';
 import TenderInput from '@/components/TenderInput';
@@ -86,7 +86,7 @@ export default function DashboardHome() {
           <h2 className="font-display text-lg font-bold text-gray-900 flex items-center gap-2">
             <Pin className="w-5 h-5 text-primary-600" /> Top Opportunities
           </h2>
-          <Link href="/dashboard/tenders" className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1">
+          <Link href="/dashboard/contracts" className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1">
             Browse All <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
@@ -110,8 +110,8 @@ export default function DashboardHome() {
                     </span>
                   )}
                 </div>
-                {/* Deadline with color */}
-                <span className={`text-xs sm:text-sm font-medium flex-shrink-0 ${getDeadlineColor(tender.deadline)}`}>
+                {/* Deadline badge with background */}
+                <span className={`text-xs sm:text-sm font-medium flex-shrink-0 px-2 py-0.5 rounded-full ${getDeadlineBgColor(tender.deadline)}`}>
                   {formatDeadline(tender.deadline)}
                 </span>
               </div>

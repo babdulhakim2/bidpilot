@@ -58,10 +58,10 @@ export default function ProposalsPage() {
           <h3 className="font-semibold text-gray-900 mb-2">No proposals yet</h3>
           <p className="text-gray-500 mb-4">Generate your first proposal from a tender</p>
           <Link 
-            href="/dashboard/tenders"
+            href="/dashboard/contracts"
             className="inline-block px-6 py-2 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700"
           >
-            Browse Opportunities
+            Browse Contracts
           </Link>
         </div>
       ) : (

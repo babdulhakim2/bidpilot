@@ -1,11 +1,33 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { requireUser, getUser } from "./lib/auth";
 
-// Get all tenders (newest first by scrapedAt or publishedAt)
+// Get all tenders (newest first by scrapedAt or publishedAt), with saved status
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db.query("tenders").order("desc").collect();
+    const tenders = await ctx.db.query("tenders").order("desc").collect();
+    
+    // Try to get user to add saved status
+    const user = await getUser(ctx);
+    if (!user) {
+      return tenders.map(t => ({ ...t, saved: false }));
+    }
+    
+    // Get user's saved tenders
+    const userTenders = await ctx.db
+      .query("userTenders")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    
+    const savedMap = new Map(
+      userTenders.filter(ut => ut.saved).map(ut => [ut.tenderId.toString(), true])
+    );
+    
+    return tenders.map(t => ({
+      ...t,
+      saved: savedMap.has(t._id.toString()),
+    }));
   },
 });
 
@@ -189,5 +211,79 @@ export const createFromAnalysis = mutation({
       publishedAt: new Date().toISOString().split("T")[0],
       scrapedAt: Date.now(),
     });
+  },
+});
+
+// Save a tender for the current user
+export const saveTender = mutation({
+  args: { tenderId: v.id("tenders") },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    
+    // Check if already saved
+    const existing = await ctx.db
+      .query("userTenders")
+      .withIndex("by_user_tender", (q) => 
+        q.eq("userId", user._id).eq("tenderId", args.tenderId)
+      )
+      .first();
+    
+    if (existing) {
+      // Update to saved
+      await ctx.db.patch(existing._id, { saved: true });
+      return existing._id;
+    }
+    
+    // Create new userTender record
+    return await ctx.db.insert("userTenders", {
+      userId: user._id,
+      tenderId: args.tenderId,
+      saved: true,
+      matchScore: 0, // Can be updated later
+    });
+  },
+});
+
+// Unsave a tender for the current user
+export const unsaveTender = mutation({
+  args: { tenderId: v.id("tenders") },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    
+    const existing = await ctx.db
+      .query("userTenders")
+      .withIndex("by_user_tender", (q) => 
+        q.eq("userId", user._id).eq("tenderId", args.tenderId)
+      )
+      .first();
+    
+    if (existing) {
+      await ctx.db.patch(existing._id, { saved: false });
+    }
+  },
+});
+
+// Get saved tenders for current user
+export const listSaved = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getUser(ctx);
+    if (!user) return [];
+    
+    const userTenders = await ctx.db
+      .query("userTenders")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("saved"), true))
+      .collect();
+    
+    const tenders = await Promise.all(
+      userTenders.map((ut) => ctx.db.get(ut.tenderId))
+    );
+    
+    return tenders.filter(Boolean).map((t, i) => ({
+      ...t,
+      saved: true,
+      userMatchScore: userTenders[i].matchScore,
+    }));
   },
 });

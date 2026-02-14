@@ -8,7 +8,7 @@ import { useEffect, useState, useTransition } from 'react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: Home, label: 'Home' },
-  { href: '/dashboard/tenders', icon: Search, label: 'Tenders' },
+  { href: '/dashboard/contracts', icon: Search, label: 'Contracts' },
   { href: '/dashboard/vault', icon: FolderOpen, label: 'Vault' },
   { href: '/dashboard/proposals', icon: FileText, label: 'Proposals' },
   { href: '/dashboard/profile', icon: User, label: 'Profile' },

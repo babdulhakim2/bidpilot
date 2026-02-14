@@ -29,9 +29,41 @@ export function timeAgo(date: Date | string | number): string {
 }
 
 /**
- * Format deadline as "X days left" or "X weeks left"
+ * Format deadline as "Feb 28 (14 days left)"
  */
 export function formatDeadline(deadline: Date | string): string {
+  const now = new Date();
+  const end = new Date(deadline);
+  const diffMs = end.getTime() - now.getTime();
+  
+  // Format the date part
+  const dateStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  
+  if (diffMs <= 0) return `${dateStr} (Expired)`;
+  
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  
+  let timeLeft: string;
+  if (days === 1) timeLeft = '1 day left';
+  else if (days < 7) timeLeft = `${days} days left`;
+  else if (days < 14) timeLeft = '1 week left';
+  else if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    timeLeft = `${weeks} weeks left`;
+  } else if (days < 60) {
+    timeLeft = '1 month left';
+  } else {
+    const months = Math.floor(days / 30);
+    timeLeft = `${months} months left`;
+  }
+  
+  return `${dateStr} (${timeLeft})`;
+}
+
+/**
+ * Get just the time remaining (for compact display)
+ */
+export function getTimeRemaining(deadline: Date | string): string {
   const now = new Date();
   const end = new Date(deadline);
   const diffMs = end.getTime() - now.getTime();

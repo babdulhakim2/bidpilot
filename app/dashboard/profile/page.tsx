@@ -190,20 +190,20 @@ export default function ProfilePage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500">Alerts</span>
+                  <span className="text-xs text-gray-500">Analysis</span>
                   <span className="text-xs font-medium text-gray-700">
-                    {subscription.usage.alertsUsed}/{subscription.usage.alertsLimit === -1 ? '∞' : subscription.usage.alertsLimit}
+                    {subscription.usage.analysisUsed ?? 0}/{subscription.usage.analysisLimit === -1 ? '∞' : subscription.usage.analysisLimit}
                   </span>
                 </div>
                 <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                   <div 
                     className={`h-full rounded-full transition-all ${
-                      subscription.usage.alertsLimit !== -1 && subscription.usage.alertsUsed >= subscription.usage.alertsLimit 
+                      subscription.usage.analysisLimit !== -1 && (subscription.usage.analysisUsed ?? 0) >= subscription.usage.analysisLimit 
                         ? 'bg-red-500' : 'bg-primary-500'
                     }`}
                     style={{ 
-                      width: subscription.usage.alertsLimit === -1 
-                        ? '10%' : `${Math.min(100, (subscription.usage.alertsUsed / subscription.usage.alertsLimit) * 100)}%` 
+                      width: subscription.usage.analysisLimit === -1 
+                        ? '10%' : `${Math.min(100, ((subscription.usage.analysisUsed ?? 0) / subscription.usage.analysisLimit) * 100)}%` 
                     }}
                   />
                 </div>

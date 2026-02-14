@@ -3,173 +3,159 @@
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 
-const BASE_URL = "https://etenders.com.ng";
 const SOURCE_ID = "etenders.com.ng";
+const RSS_URL = "https://etenders.com.ng/feed/";
 
-// Parse date from various formats
-function parseDate(dateStr: string): string {
+// Parse date from RSS format
+function parseRssDate(dateStr: string): string {
   try {
-    // Handle formats like "Feb 13, 2026" or "13/02/2026" or "2026-02-13"
-    const cleaned = dateStr.trim();
-    
-    // Try direct parse
-    let date = new Date(cleaned);
+    const date = new Date(dateStr);
     if (!isNaN(date.getTime())) {
       return date.toISOString().split("T")[0];
     }
-    
-    // Try DD/MM/YYYY
-    const ddmmyyyy = cleaned.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-    if (ddmmyyyy) {
-      const [, day, month, year] = ddmmyyyy;
-      return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
-    }
-    
     return new Date().toISOString().split("T")[0];
   } catch {
     return new Date().toISOString().split("T")[0];
   }
 }
 
-// Extract tender listings from HTML
-function parseListingPage(html: string): Array<{
+// Extract deadline from categories (format: "26/02/2026" or "27/02/2026")
+function extractDeadline(categories: string[]): string {
+  for (const cat of categories) {
+    const match = cat.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (match) {
+      const [, day, month, year] = match;
+      return `${year}-${month}-${day}`;
+    }
+  }
+  // Default: 30 days from now
+  const future = new Date();
+  future.setDate(future.getDate() + 30);
+  return future.toISOString().split("T")[0];
+}
+
+// Extract organization from title (before the hyphen/dash)
+function extractOrganization(title: string): string {
+  // Common patterns: "ORG NAME - INVITATION TO..." or "ORG NAME-INVITATION..."
+  const parts = title.split(/[-–—]/);
+  const org = parts[0]?.trim();
+  if (org && org.length > 3 && org.length < 150) {
+    return org;
+  }
+  return "Nigerian Organization";
+}
+
+// Normalize category name
+function normalizeCategory(cat: string): string {
+  // Skip date categories
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(cat)) return "";
+  if (cat === "N/A") return "";
+  
+  const lower = cat.toLowerCase().trim();
+  const mapping: Record<string, string> = {
+    "construction & engineering": "Construction",
+    "building construction": "Construction",
+    "rehabilitation/renovation": "Construction",
+    "borehole & dredging works": "Construction",
+    "ict and software": "ICT",
+    "computer hardware": "ICT",
+    "solar and renewable": "Solar & Renewable",
+    "supply of vehicles": "Supplies",
+    "office equipment & supplies": "Supplies",
+    "general supplies and services": "Supplies",
+    "medical, health & laboratory": "Healthcare",
+    "medical supply": "Healthcare",
+    "medical outreach": "Healthcare",
+    "consultancy": "Consultancy",
+    "professional services": "Services",
+  };
+  
+  return mapping[lower] || cat.trim();
+}
+
+// Parse RSS feed
+function parseRssFeed(xml: string): Array<{
   title: string;
-  sourceId: string;
-  sourceUrl: string;
   organization: string;
+  sourceUrl: string;
+  sourceId: string;
   deadline: string;
-  category: string;
-  location: string;
   publishedAt: string;
+  categories: string[];
+  description: string;
 }> {
-  const tenders: Array<{
+  const items: Array<{
     title: string;
-    sourceId: string;
-    sourceUrl: string;
     organization: string;
+    sourceUrl: string;
+    sourceId: string;
     deadline: string;
-    category: string;
-    location: string;
     publishedAt: string;
+    categories: string[];
+    description: string;
   }> = [];
 
-  // WordPress tender listing pattern - look for article/post entries
-  // Pattern varies but typically has class containing "tender" or "post"
-  const articleRegex = /<article[^>]*class="[^"]*post[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
-  const linkRegex = /<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
-  const titleRegex = /<h\d[^>]*class="[^"]*entry-title[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/gi;
-  
-  // Try to find tender entries
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   let match;
-  
-  // Method 1: Look for entry-title links
-  while ((match = titleRegex.exec(html)) !== null) {
-    const url = match[1];
-    const title = match[2].trim();
+
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const itemXml = match[1];
     
-    if (!title || !url) continue;
+    const titleMatch = itemXml.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/);
+    const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/);
+    const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
+    const guidMatch = itemXml.match(/<guid[^>]*>([\s\S]*?)<\/guid>/);
     
-    // Extract sourceId from URL
-    const urlParts = url.split("/").filter(Boolean);
-    const sourceId = urlParts[urlParts.length - 1] || `hash-${Date.now()}`;
+    // Extract categories
+    const categoryRegex = /<category>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/category>/g;
+    const categories: string[] = [];
+    let catMatch;
+    while ((catMatch = categoryRegex.exec(itemXml)) !== null) {
+      categories.push(catMatch[1].trim());
+    }
     
-    // Try to find associated metadata
-    const deadlineMatch = html.match(new RegExp(`${sourceId}[\\s\\S]{0,500}deadline[^<]*?([\\d]{1,2}[\\/\\-][\\d]{1,2}[\\/\\-][\\d]{4})`, "i"));
-    const categoryMatch = html.match(new RegExp(`${sourceId}[\\s\\S]{0,300}category[^<]*?<[^>]*>([^<]+)`, "i"));
+    if (!titleMatch || !linkMatch) continue;
     
-    tenders.push({
+    const title = titleMatch[1]
+      .trim()
+      .replace(/&amp;/g, "&")
+      .replace(/&#038;/g, "&")
+      .replace(/&#8211;/g, "-")
+      .replace(/&#8217;/g, "'");
+    
+    const link = linkMatch[1].trim();
+    
+    // Extract sourceId from guid or URL
+    let sourceId = "";
+    if (guidMatch) {
+      const pMatch = guidMatch[1].match(/\?p=(\d+)/);
+      if (pMatch) {
+        sourceId = `post-${pMatch[1]}`;
+      }
+    }
+    if (!sourceId) {
+      const urlParts = link.split("/").filter(Boolean);
+      sourceId = urlParts[urlParts.length - 1] || `hash-${Date.now()}`;
+    }
+    
+    // Get normalized categories (excluding dates and N/A)
+    const normalizedCats = categories
+      .map(normalizeCategory)
+      .filter(c => c.length > 0);
+    
+    items.push({
       title,
+      organization: extractOrganization(title),
+      sourceUrl: link,
       sourceId,
-      sourceUrl: url.startsWith("http") ? url : `${BASE_URL}${url}`,
-      organization: extractOrg(title),
-      deadline: deadlineMatch ? parseDate(deadlineMatch[1]) : getFutureDate(30),
-      category: categoryMatch ? normalizeCategory(categoryMatch[1]) : "General",
-      location: "Nigeria",
-      publishedAt: new Date().toISOString().split("T")[0],
+      deadline: extractDeadline(categories),
+      publishedAt: pubDateMatch ? parseRssDate(pubDateMatch[1]) : new Date().toISOString().split("T")[0],
+      categories: [...new Set(normalizedCats)].slice(0, 3),
+      description: `Tender opportunity from ${extractOrganization(title)}. Categories: ${normalizedCats.join(", ") || "General"}`,
     });
   }
 
-  // Method 2: Fallback - look for any tender links
-  if (tenders.length === 0) {
-    const tenderLinkRegex = /<a[^>]*href="([^"]*tender[^"]*)"[^>]*>([^<]+)<\/a>/gi;
-    while ((match = tenderLinkRegex.exec(html)) !== null) {
-      const url = match[1];
-      const title = match[2].trim();
-      
-      if (!title || title.length < 10) continue;
-      
-      const urlParts = url.split("/").filter(Boolean);
-      const sourceId = urlParts[urlParts.length - 1] || `hash-${Date.now()}-${tenders.length}`;
-      
-      // Skip if already have this
-      if (tenders.some(t => t.sourceId === sourceId)) continue;
-      
-      tenders.push({
-        title,
-        sourceId,
-        sourceUrl: url.startsWith("http") ? url : `${BASE_URL}${url}`,
-        organization: extractOrg(title),
-        deadline: getFutureDate(30),
-        category: "General",
-        location: "Nigeria",
-        publishedAt: new Date().toISOString().split("T")[0],
-      });
-    }
-  }
-
-  return tenders;
-}
-
-function extractOrg(title: string): string {
-  const parts = title.split(/[-–—:]/);
-  return parts[0]?.trim().slice(0, 100) || "Unknown Organization";
-}
-
-function normalizeCategory(cat: string): string {
-  const lower = cat.toLowerCase().trim();
-  const mapping: Record<string, string> = {
-    "construction": "Construction",
-    "ict": "ICT",
-    "information technology": "ICT",
-    "oil & gas": "Oil & Gas",
-    "oil and gas": "Oil & Gas",
-    "consultancy": "Consultancy",
-    "supplies": "Supplies",
-    "services": "Services",
-    "healthcare": "Healthcare",
-    "education": "Education",
-  };
-  return mapping[lower] || cat.trim().slice(0, 50);
-}
-
-function getFutureDate(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split("T")[0];
-}
-
-// Fetch with logging
-async function fetchWithLog(ctx: any, url: string): Promise<string> {
-  await ctx.runMutation(internal.scraperLogs.log, {
-    source: SOURCE_ID,
-    action: "fetch",
-    message: `Fetching ${url}`,
-    metadata: { url },
-  });
-
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  return await response.text();
+  return items;
 }
 
 // Main scraper action
@@ -179,20 +165,37 @@ export const scrapeListing = action({
     await ctx.runMutation(internal.scraperLogs.log, {
       source: SOURCE_ID,
       action: "start",
-      message: "Starting scrape run",
+      message: "Starting RSS feed fetch",
     });
 
     try {
-      // Fetch main listing page
-      const html = await fetchWithLog(ctx, `${BASE_URL}/category/tenders/`);
+      await ctx.runMutation(internal.scraperLogs.log, {
+        source: SOURCE_ID,
+        action: "fetch",
+        message: `Fetching ${RSS_URL}`,
+        metadata: { url: RSS_URL },
+      });
+
+      const response = await fetch(RSS_URL, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const xml = await response.text();
       
       await ctx.runMutation(internal.scraperLogs.log, {
         source: SOURCE_ID,
         action: "parse",
-        message: `Received ${html.length} bytes, parsing...`,
+        message: `Received ${xml.length} bytes, parsing RSS...`,
       });
 
-      const listings = parseListingPage(html);
+      const listings = parseRssFeed(xml);
       
       await ctx.runMutation(internal.scraperLogs.log, {
         source: SOURCE_ID,
@@ -222,10 +225,10 @@ export const scrapeListing = action({
           organization: listing.organization,
           budget: 0,
           deadline: listing.deadline,
-          category: listing.category,
-          categories: [listing.category],
-          description: `Tender opportunity from ${listing.organization}. View full details at source.`,
-          location: listing.location,
+          category: listing.categories[0] || "General",
+          categories: listing.categories.length > 0 ? listing.categories : ["General"],
+          description: listing.description,
+          location: "Nigeria",
           requirements: [],
           missing: [],
           source: SOURCE_ID,

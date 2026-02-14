@@ -27,6 +27,7 @@ import type * as scrapers_scheduler from "../scrapers/scheduler.js";
 import type * as scrapers_tendersnigeria from "../scrapers/tendersnigeria.js";
 import type * as scrapers_types from "../scrapers/types.js";
 import type * as seed from "../seed.js";
+import type * as settings from "../settings.js";
 import type * as tenders from "../tenders.js";
 import type * as userTenders from "../userTenders.js";
 import type * as users from "../users.js";
@@ -59,6 +60,7 @@ declare const fullApi: ApiFromModules<{
   "scrapers/tendersnigeria": typeof scrapers_tendersnigeria;
   "scrapers/types": typeof scrapers_types;
   seed: typeof seed;
+  settings: typeof settings;
   tenders: typeof tenders;
   userTenders: typeof userTenders;
   users: typeof users;

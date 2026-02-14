@@ -6,7 +6,7 @@ import { api, internal } from "../_generated/api";
 // List of all scraper sources
 const SCRAPERS = [
   { id: "publicprocurement.ng", action: api.scrapers.publicprocurement.scrapeListing, enabled: true },
-  { id: "etenders.com.ng", action: api.scrapers.etenders.scrapeListing, enabled: true },
+  { id: "etenders.com.ng", action: api.scrapers.etenders.scrapeListing, enabled: false }, // Disabled - paywall
   { id: "nocopo.gov.ng", action: api.scrapers.nocopo.scrapeListing, enabled: true },
   { id: "tendersnigeria.com", action: api.scrapers.tendersnigeria.scrapeListing, enabled: true },
 ];

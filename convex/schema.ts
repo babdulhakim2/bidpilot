@@ -190,6 +190,13 @@ export default defineSchema({
     .index("by_reference", ["paystackReference"])
     .index("by_status", ["status"]),
 
+  // App settings (admin configurable)
+  settings: defineTable({
+    key: v.string(),
+    value: v.string(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   // Scraper logs for real-time monitoring
   scraperLogs: defineTable({
     source: v.string(),           // e.g., "etenders.com.ng"

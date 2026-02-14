@@ -1,9 +1,10 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, UserButton } from '@clerk/nextjs';
-import { Home, Search, FolderOpen, FileText, User, Bell, Activity } from 'lucide-react';
+import { Home, Search, FolderOpen, FileText, User, Bell } from 'lucide-react';
+import { useEffect, useState, useTransition } from 'react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: Home, label: 'Home' },
@@ -11,12 +12,20 @@ const NAV_ITEMS = [
   { href: '/dashboard/vault', icon: FolderOpen, label: 'Vault' },
   { href: '/dashboard/proposals', icon: FileText, label: 'Proposals' },
   { href: '/dashboard/profile', icon: User, label: 'Profile' },
-  { href: '/dashboard/logs', icon: Activity, label: 'Logs' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { isSignedIn } = useAuth();
+  const [isPending, startTransition] = useTransition();
+
+  // Prefetch all nav routes on mount for instant navigation
+  useEffect(() => {
+    NAV_ITEMS.forEach((item) => {
+      router.prefetch(item.href);
+    });
+  }, [router]);
 
   // Check if path matches (exact for /dashboard, startsWith for others)
   const isActive = (href: string) => {
@@ -24,6 +33,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return pathname === '/dashboard';
     }
     return pathname.startsWith(href);
+  };
+
+  // Smooth navigation handler
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    e.preventDefault();
+    if (pathname !== href) {
+      startTransition(() => {
+        router.push(href);
+      });
+    }
   };
 
   return (
@@ -69,7 +88,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
+                  onClick={(e) => handleNavClick(e, item.href)}
+                  prefetch={true}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-colors duration-150 ${
                     active
                       ? 'bg-primary-50 text-primary-700'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
@@ -112,7 +133,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center justify-center w-16 h-full transition-colors ${
+                onClick={(e) => handleNavClick(e, item.href)}
+                prefetch={true}
+                className={`flex flex-col items-center justify-center w-16 h-full transition-colors duration-150 ${
                   active ? 'text-primary-600' : 'text-gray-500'
                 }`}
               >

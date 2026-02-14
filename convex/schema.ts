@@ -190,6 +190,22 @@ export default defineSchema({
     .index("by_reference", ["paystackReference"])
     .index("by_status", ["status"]),
 
+  // Document chunks with embeddings for vector search
+  documentChunks: defineTable({
+    documentId: v.id("documents"),
+    userId: v.id("users"),
+    chunkIndex: v.number(),
+    text: v.string(),
+    embedding: v.array(v.float64()),
+  })
+    .index("by_document", ["documentId"])
+    .index("by_user", ["userId"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1536, // OpenAI text-embedding-3-small
+      filterFields: ["userId"],
+    }),
+
   // Credits - for one-time purchases or bonuses
   credits: defineTable({
     userId: v.id("users"),

@@ -26,6 +26,8 @@ import type * as seed from "../seed.js";
 import type * as tenders from "../tenders.js";
 import type * as userTenders from "../userTenders.js";
 import type * as users from "../users.js";
+import type * as vectorSearch from "../vectorSearch.js";
+import type * as vectorSearchActions from "../vectorSearchActions.js";
 
 import type {
   ApiFromModules,
@@ -52,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   tenders: typeof tenders;
   userTenders: typeof userTenders;
   users: typeof users;
+  vectorSearch: typeof vectorSearch;
+  vectorSearchActions: typeof vectorSearchActions;
 }>;
 
 /**

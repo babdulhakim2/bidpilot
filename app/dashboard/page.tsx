@@ -6,8 +6,8 @@ import { api } from '@/convex/_generated/api';
 import { useCurrentUser } from '@/hooks/useUser';
 import { useStore, formatNaira, daysUntil, toTitleCase } from '@/lib/store';
 import { 
-  Target, Calendar, Pin, ChevronRight, Zap,
-  Loader2, AlertTriangle, ExternalLink
+  Target, Calendar, Pin, ChevronRight,
+  Loader2, ExternalLink
 } from 'lucide-react';
 import TenderModal from '@/components/TenderModal';
 import TenderInput from '@/components/TenderInput';
@@ -18,7 +18,6 @@ export default function DashboardHome() {
 
   // Fetch data
   const tenders = useQuery(api.tenders.list) ?? [];
-  const subscription = useQuery(api.billing.subscriptions.getMine);
 
   const selectedTender = tenders.find((t: any) => t._id === selectedTenderId);
 
@@ -77,70 +76,10 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Usage Card */}
-      {subscription && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary-600" />
-              <span className="font-semibold text-gray-900 capitalize">{subscription.plan} Plan</span>
-            </div>
-            <Link href="/billing" className="text-sm text-primary-600 font-medium hover:text-primary-700">
-              {subscription.plan === 'free' ? 'Upgrade' : 'Manage'}
-            </Link>
-          </div>
-          {subscription.usage && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500">Alerts</span>
-                  <span className="text-xs font-medium text-gray-700">
-                    {subscription.usage.alertsUsed}/{subscription.usage.alertsLimit === -1 ? '∞' : subscription.usage.alertsLimit}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all ${
-                      subscription.usage.alertsLimit !== -1 && subscription.usage.alertsUsed >= subscription.usage.alertsLimit 
-                        ? 'bg-red-500' : 'bg-primary-500'
-                    }`}
-                    style={{ 
-                      width: subscription.usage.alertsLimit === -1 
-                        ? '10%' : `${Math.min(100, (subscription.usage.alertsUsed / subscription.usage.alertsLimit) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-gray-500">Proposals</span>
-                  <span className="text-xs font-medium text-gray-700">
-                    {subscription.usage.proposalsUsed}/{subscription.usage.proposalsLimit === -1 ? '∞' : subscription.usage.proposalsLimit}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all ${
-                      subscription.usage.proposalsLimit !== -1 && subscription.usage.proposalsUsed >= subscription.usage.proposalsLimit 
-                        ? 'bg-red-500' : 'bg-primary-500'
-                    }`}
-                    style={{ 
-                      width: subscription.usage.proposalsLimit === -1 
-                        ? '10%' : `${Math.min(100, (subscription.usage.proposalsUsed / subscription.usage.proposalsLimit) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-          {subscription.plan !== 'free' && subscription.status === 'cancelled' && subscription.currentPeriodEnd && (
-            <div className="mt-3 flex items-center gap-2 text-amber-600 text-sm">
-              <AlertTriangle className="w-4 h-4" />
-              <span>Ends {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Tender Analysis Input */}
+      <section className="mb-8">
+        <TenderInput />
+      </section>
 
       {/* Top Opportunities */}
       <section className="mb-8">
@@ -194,11 +133,6 @@ export default function DashboardHome() {
             </div>
           ))}
         </div>
-      </section>
-
-      {/* Tender Analysis Input */}
-      <section>
-        <TenderInput />
       </section>
 
       {/* Tender Detail Modal */}

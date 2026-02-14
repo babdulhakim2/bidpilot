@@ -69,7 +69,7 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
           </div>
         </div>
         
-        <div className="p-6 pt-4 pb-24 lg:pb-6">
+        <div className="p-6 pt-4 pb-32 sm:pb-24 lg:pb-8">
           <div className="flex items-start justify-between mb-4">
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(tender.status)}`}>
               {tender.status === 'qualified' ? '✓ Qualified' : 
@@ -128,9 +128,10 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
               </div>
             ))}
             {tender.missing?.map((miss: string, i: number) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full border-2 border-amber-400" />
-                <span className="text-sm text-amber-700">{miss} (missing)</span>
+              <div key={i} className="flex items-center gap-2 bg-red-50 p-2 rounded-lg -mx-2">
+                <X className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-red-700">{miss}</span>
+                <span className="text-xs text-red-400 ml-auto">missing</span>
               </div>
             ))}
           </div>

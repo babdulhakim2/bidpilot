@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useAction } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useCurrentUser } from '@/hooks/useUser';
-import { formatNaira, daysUntil, toTitleCase } from '@/lib/store';
+import { formatNaira, toTitleCase } from '@/lib/store';
+import { formatDeadline, getDeadlineBgColor } from '@/lib/timeUtils';
 import { 
-  X, Check, Building2, MapPin, ExternalLink, Bookmark, Sparkles, Loader2,
+  X, Check, Building2, MapPin, ExternalLink, Bookmark, BookmarkCheck, Sparkles, Loader2,
   Target, AlertTriangle, ChevronRight, Lightbulb
 } from 'lucide-react';
 import UpgradeModal from './UpgradeModal';
@@ -30,14 +31,19 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
   const { userId } = useCurrentUser();
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [matchAnalysis, setMatchAnalysis] = useState<MatchAnalysis | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   const createProposal = useMutation(api.proposals.createMine);
   const runPipeline = useAction(api.proposalPipeline.runPipeline);
   const analyzeTender = useAction(api.analysis.matchTender.analyzeTenderForUser);
+  const saveTender = useMutation(api.tenders.saveTender);
+  const unsaveTender = useMutation(api.tenders.unsaveTender);
   const subscription = useQuery(api.billing.subscriptions.getMine);
   const canUseProposal = useQuery(api.billing.subscriptions.canUse, { type: 'proposal' });
+  
+  const isSaved = tender.saved === true;
 
   const isPaid = subscription?.plan && subscription.plan !== 'free';
 
@@ -80,13 +86,29 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
     }
   };
 
+  const handleSave = async () => {
+    if (!userId) return;
+    setSaving(true);
+    try {
+      if (isSaved) {
+        await unsaveTender({ tenderId: tender._id });
+      } else {
+        await saveTender({ tenderId: tender._id });
+      }
+    } catch (e) {
+      console.error('Failed to save tender:', e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleGenerateProposal = async () => {
     if (!userId) {
       alert('Please sign in to generate proposals');
       return;
     }
     
-    // Check if user can create more proposals
+    // Check if user can create more proposals - show upgrade modal if not
     if (canUseProposal && !canUseProposal.allowed) {
       setShowUpgradeModal(true);
       return;
@@ -184,15 +206,17 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
                 {tender.status === 'qualified' ? '✓ Qualified' : 
                  tender.status === 'partial' ? '⚠ Partial Match' : '✗ Low Match'}
               </span>
-              {daysUntil(tender.deadline) > 0 && (
-                <span className="text-sm text-gray-500">{daysUntil(tender.deadline)} days left</span>
-              )}
+              <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${getDeadlineBgColor(tender.deadline)}`}>
+                {formatDeadline(tender.deadline)}
+              </span>
             </div>
           )}
 
           {/* Deadline for paid */}
-          {isPaid && daysUntil(tender.deadline) > 0 && (
-            <div className="text-sm text-gray-500 mb-4">{daysUntil(tender.deadline)} days left</div>
+          {isPaid && (
+            <span className={`inline-block text-xs font-medium px-2.5 py-1 rounded-full mb-4 ${getDeadlineBgColor(tender.deadline)}`}>
+              {formatDeadline(tender.deadline)}
+            </span>
           )}
           
           <h2 className="font-display text-xl font-bold text-gray-900 mb-2">
@@ -234,7 +258,7 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
           
           <p className="text-gray-600 mb-6">{toTitleCase(tender.description)}</p>
 
-          {/* Match Analysis (Paid Users Only) */}
+          {/* Match Analysis (Paid Users) */}
           {isPaid && matchAnalysis && (
             <div className="space-y-4 mb-6">
               {/* Why You Match */}
@@ -300,53 +324,73 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
             </div>
           )}
 
-          {/* Basic Requirements (for free users or when no analysis) */}
-          {(!isPaid || !matchAnalysis) && (tender.requirements?.length > 0 || tender.missing?.length > 0) && (
-            <>
-              <h3 className="font-semibold text-gray-900 mb-2">Requirements</h3>
-              <div className="space-y-2 mb-6">
-                {tender.requirements?.map((req: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2">
+          {/* Blurred Preview for Free Users - shows what they're missing */}
+          {!isPaid && (
+            <div className="relative mb-6 rounded-xl overflow-hidden">
+              {/* Blurred fake content */}
+              <div className="blur-sm select-none pointer-events-none p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <span className="text-emerald-700 font-bold">78%</span>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-800">Match Score</div>
+                    <div className="text-xs text-gray-500">Based on your profile</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-500" />
-                    <span className="text-sm text-gray-700">{req}</span>
+                    <span className="text-sm text-gray-700">Strong experience in similar projects</span>
                   </div>
-                ))}
-                {tender.missing?.map((miss: string, i: number) => (
-                  <div key={i} className="flex items-center gap-2 bg-red-50 p-2 rounded-lg -mx-2">
-                    <X className="w-4 h-4 text-red-500 flex-shrink-0" />
-                    <span className="text-sm font-medium text-red-700">{miss}</span>
-                    <span className="text-xs text-red-400 ml-auto">missing</span>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-emerald-500" />
+                    <span className="text-sm text-gray-700">Required certifications verified</span>
                   </div>
-                ))}
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm text-gray-700">May need additional team members</span>
+                  </div>
+                </div>
               </div>
-            </>
-          )}
-
-          {/* Upgrade CTA for free users or users at limit */}
-          {(!isPaid || (canUseProposal && !canUseProposal.allowed)) && (
-            <div className="p-4 bg-gray-50 rounded-xl mb-6 text-center">
-              <p className="text-sm text-gray-600 mb-2">
-                {!isPaid 
-                  ? 'Upgrade to see personalized match scores and winning strategies'
-                  : `You've used all ${canUseProposal?.limit || 0} proposals this month`
-                }
-              </p>
-              <button 
-                onClick={() => setShowUpgradeModal(true)}
-                className="text-sm font-medium text-primary-600 hover:text-primary-700"
-              >
-                Upgrade Now →
-              </button>
+              {/* Upgrade overlay */}
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-4">
+                <Sparkles className="w-8 h-8 text-primary-600 mb-2" />
+                <p className="text-sm font-medium text-gray-900 text-center mb-3">
+                  See your match score & winning strategy
+                </p>
+                <button 
+                  onClick={() => setShowUpgradeModal(true)}
+                  className="px-4 py-2 bg-primary-600 text-white text-sm font-semibold rounded-lg hover:bg-primary-700 transition"
+                >
+                  Upgrade to Unlock
+                </button>
+              </div>
             </div>
           )}
 
           <div className="flex gap-3">
-            <button className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition flex items-center justify-center gap-2">
-              <Bookmark className="w-4 h-4" /> Save
+            <button 
+              onClick={handleSave}
+              disabled={saving}
+              className={`flex-1 py-3 font-semibold rounded-xl transition flex items-center justify-center gap-2 ${
+                isSaved 
+                  ? 'bg-primary-100 text-primary-700 hover:bg-primary-200' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isSaved ? (
+                <BookmarkCheck className="w-4 h-4" />
+              ) : (
+                <Bookmark className="w-4 h-4" />
+              )}
+              {isSaved ? 'Saved' : 'Save'}
             </button>
             <button 
               onClick={handleGenerateProposal}
-              disabled={generating || !isPaid || (canUseProposal && !canUseProposal.allowed)}
+              disabled={generating}
               className="flex-1 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {generating ? (

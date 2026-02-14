@@ -8,28 +8,35 @@ const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!;
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
 // Plan codes and pricing
+// Free plan: 1 analysis forever, 1 proposal forever (handled separately)
 export const PLANS = {
   starter: {
     name: "Starter",
     amountKobo: 2000000, // ₦20,000
     amountNaira: 20000,
-    alerts: 15,
+    analysis: 15,
     proposals: 3,
   },
   pro: {
     name: "Pro",
     amountKobo: 5000000, // ₦50,000
     amountNaira: 50000,
-    alerts: 100,
+    analysis: 50,
     proposals: 10,
   },
   enterprise: {
     name: "Enterprise",
     amountKobo: 0, // Custom
     amountNaira: 0,
-    alerts: -1, // Unlimited
+    analysis: -1, // Unlimited
     proposals: -1,
   },
+};
+
+// Free plan limits (lifetime, not monthly)
+export const FREE_LIMITS = {
+  analysis: 1,
+  proposals: 1,
 };
 
 // Helper to make Paystack API calls

@@ -162,22 +162,26 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_paystack_subscription", ["paystackSubscriptionCode"]),
 
-  // Usage tracking - alerts and proposals used this period
+  // Usage tracking - analysis and proposals used this period
   usage: defineTable({
     userId: v.id("users"),
     subscriptionId: v.optional(v.id("subscriptions")),
     
-    // Period
+    // Period (for free users: lifetime, for paid: billing period)
     periodStart: v.number(),
     periodEnd: v.number(),
     
     // Limits based on plan
-    alertsLimit: v.number(),
+    analysisLimit: v.optional(v.number()),
     proposalsLimit: v.number(),
+    // Legacy field (migrating from alerts to analysis)
+    alertsLimit: v.optional(v.number()),
     
     // Usage counts
-    alertsUsed: v.number(),
+    analysisUsed: v.optional(v.number()),
     proposalsUsed: v.number(),
+    // Legacy field
+    alertsUsed: v.optional(v.number()),
     
     createdAt: v.number(),
     updatedAt: v.number(),

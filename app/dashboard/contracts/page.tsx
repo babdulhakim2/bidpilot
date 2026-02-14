@@ -7,9 +7,9 @@ import { useStore, formatNaira, toTitleCase } from '@/lib/store';
 import { ChevronRight, ExternalLink, Loader2, Check, X } from 'lucide-react';
 import TenderModal from '@/components/TenderModal';
 import { CATEGORIES, getCategoryLabel } from '@/lib/categories';
-import { formatDeadline, getDeadlineColor, timeAgo } from '@/lib/timeUtils';
+import { formatDeadline, getDeadlineBgColor, timeAgo } from '@/lib/timeUtils';
 
-export default function TendersPage() {
+export default function ContractsPage() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const { selectedTenderId, setSelectedTenderId } = useStore();
 
@@ -33,8 +33,8 @@ export default function TendersPage() {
   return (
     <>
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-gray-900">Browse Opportunities</h1>
-        <p className="text-gray-600 mt-1">{filteredTenders.length} opportunities available</p>
+        <h1 className="font-display text-2xl font-bold text-gray-900">Browse Contracts</h1>
+        <p className="text-gray-600 mt-1">{filteredTenders.length} contracts available</p>
       </div>
 
       {/* Multi-select Filter Pills */}
@@ -73,11 +73,11 @@ export default function TendersPage() {
           {tenders.length === 0 ? (
             <>
               <Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-4" />
-              <p className="text-gray-500">Loading tenders...</p>
+              <p className="text-gray-500">Loading contracts...</p>
             </>
           ) : (
             <>
-              <p className="text-gray-500 mb-2">No tenders match your filters</p>
+              <p className="text-gray-500 mb-2">No contracts match your filters</p>
               <button onClick={clearFilters} className="text-primary-600 font-medium">
                 Clear filters
               </button>
@@ -105,8 +105,8 @@ export default function TendersPage() {
                     </span>
                   )}
                 </div>
-                {/* Deadline with color */}
-                <span className={`text-xs sm:text-sm font-medium flex-shrink-0 ${getDeadlineColor(tender.deadline)}`}>
+                {/* Deadline badge with background */}
+                <span className={`text-xs sm:text-sm font-medium flex-shrink-0 px-2 py-0.5 rounded-full ${getDeadlineBgColor(tender.deadline)}`}>
                   {formatDeadline(tender.deadline)}
                 </span>
               </div>

@@ -1,6 +1,6 @@
 import { 
   Construction, Monitor, Users, Package, Sun, Briefcase,
-  Wrench, Truck, GraduationCap, Heart, Shield, Zap,
+  Wrench, Truck, GraduationCap, Heart, Shield, Fuel,
   Leaf, HandHeart, LucideIcon
 } from 'lucide-react';
 
@@ -17,13 +17,13 @@ export const CATEGORIES: Category[] = [
   { id: 'consultancy', label: 'Consultancy', icon: Users, description: 'Advisory, professional services' },
   { id: 'supplies', label: 'Supplies & Goods', icon: Package, description: 'Office supplies, equipment' },
   { id: 'energy', label: 'Energy & Solar', icon: Sun, description: 'Renewable energy, power systems' },
+  { id: 'oil-gas', label: 'Oil & Gas', icon: Fuel, description: 'Petroleum, refinery, pipelines' },
   { id: 'professional', label: 'Professional Services', icon: Briefcase, description: 'Legal, accounting, HR' },
   { id: 'maintenance', label: 'Maintenance', icon: Wrench, description: 'Repairs, facility management' },
   { id: 'logistics', label: 'Logistics & Transport', icon: Truck, description: 'Shipping, fleet, warehousing' },
   { id: 'education', label: 'Education & Training', icon: GraduationCap, description: 'Training programs, e-learning' },
   { id: 'healthcare', label: 'Healthcare', icon: Heart, description: 'Medical supplies, health services' },
   { id: 'security', label: 'Security', icon: Shield, description: 'Physical security, cybersecurity' },
-  { id: 'electrical', label: 'Electrical', icon: Zap, description: 'Electrical installations, systems' },
   { id: 'agriculture', label: 'Agriculture', icon: Leaf, description: 'Farming, agro-processing, irrigation' },
   { id: 'social', label: 'Social Services', icon: HandHeart, description: 'Welfare programs, community development' },
 ];

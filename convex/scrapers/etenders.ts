@@ -1,23 +1,25 @@
 "use node";
 
 import { action } from "../_generated/server";
-import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
 
-const RSS_URL = "https://www.publicprocurement.ng/feed/";
-const SOURCE_ID = "publicprocurement.ng";
+const SOURCE_ID = "etenders.com.ng";
+const RSS_URL = "https://etenders.com.ng/feed/";
 
-// Parse date from RSS format to ISO string
+// Parse date from RSS format
 function parseRssDate(dateStr: string): string {
   try {
     const date = new Date(dateStr);
-    return date.toISOString().split("T")[0];
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split("T")[0];
+    }
+    return new Date().toISOString().split("T")[0];
   } catch {
     return new Date().toISOString().split("T")[0];
   }
 }
 
-// Extract deadline from categories (format: "10/03/2026")
+// Extract deadline from categories (format: "26/02/2026" or "27/02/2026")
 function extractDeadline(categories: string[]): string {
   for (const cat of categories) {
     const match = cat.match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -32,35 +34,42 @@ function extractDeadline(categories: string[]): string {
   return future.toISOString().split("T")[0];
 }
 
-// Extract organization from title (before the hyphen)
+// Extract organization from title (before the hyphen/dash)
 function extractOrganization(title: string): string {
+  // Common patterns: "ORG NAME - INVITATION TO..." or "ORG NAME-INVITATION..."
   const parts = title.split(/[-–—]/);
-  return parts[0]?.trim() || title;
+  const org = parts[0]?.trim();
+  if (org && org.length > 3 && org.length < 150) {
+    return org;
+  }
+  return "Nigerian Organization";
 }
 
 // Normalize category name
 function normalizeCategory(cat: string): string {
   // Skip date categories
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(cat)) return "";
-  
-  const mapping: Record<string, string> = {
-    "construction": "Construction",
-    "construction and engineering": "Construction",
-    "ict & software": "ICT",
-    "ict software": "ICT",
-    "computer hardware": "ICT",
-    "consultancy": "Consultancy",
-    "furniture and furnishing": "Supplies",
-    "office equipment & supplies": "Supplies",
-    "office equipment supplies": "Supplies",
-    "general supplies and services": "Supplies",
-    "solar and renewable": "Solar & Renewable",
-    "rehabilitation/renovations": "Construction",
-    "rehabilitation renovations": "Construction",
-    "conference hall": "Services",
-  };
+  if (cat === "N/A") return "";
   
   const lower = cat.toLowerCase().trim();
+  const mapping: Record<string, string> = {
+    "construction & engineering": "Construction",
+    "building construction": "Construction",
+    "rehabilitation/renovation": "Construction",
+    "borehole & dredging works": "Construction",
+    "ict and software": "ICT",
+    "computer hardware": "ICT",
+    "solar and renewable": "Solar & Renewable",
+    "supply of vehicles": "Supplies",
+    "office equipment & supplies": "Supplies",
+    "general supplies and services": "Supplies",
+    "medical, health & laboratory": "Healthcare",
+    "medical supply": "Healthcare",
+    "medical outreach": "Healthcare",
+    "consultancy": "Consultancy",
+    "professional services": "Services",
+  };
+  
   return mapping[lower] || cat.trim();
 }
 
@@ -86,18 +95,15 @@ function parseRssFeed(xml: string): Array<{
     description: string;
   }> = [];
 
-  // Extract items from RSS
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   let match;
 
   while ((match = itemRegex.exec(xml)) !== null) {
     const itemXml = match[1];
     
-    // Extract fields
     const titleMatch = itemXml.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/);
     const linkMatch = itemXml.match(/<link>([\s\S]*?)<\/link>/);
     const pubDateMatch = itemXml.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-    const descMatch = itemXml.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/);
     const guidMatch = itemXml.match(/<guid[^>]*>([\s\S]*?)<\/guid>/);
     
     // Extract categories
@@ -110,33 +116,29 @@ function parseRssFeed(xml: string): Array<{
     
     if (!titleMatch || !linkMatch) continue;
     
-    const title = titleMatch[1].trim();
-    const link = linkMatch[1].replace(/&amp;/g, "&").split("?")[0]; // Clean URL
+    const title = titleMatch[1]
+      .trim()
+      .replace(/&amp;/g, "&")
+      .replace(/&#038;/g, "&")
+      .replace(/&#8211;/g, "-")
+      .replace(/&#8217;/g, "'");
     
-    // Extract sourceId from URL or guid
+    const link = linkMatch[1].trim();
+    
+    // Extract sourceId from guid or URL
     let sourceId = "";
     if (guidMatch) {
-      const guidUrl = guidMatch[1];
-      const pMatch = guidUrl.match(/\?p=(\d+)/);
+      const pMatch = guidMatch[1].match(/\?p=(\d+)/);
       if (pMatch) {
         sourceId = `post-${pMatch[1]}`;
       }
     }
     if (!sourceId) {
       const urlParts = link.split("/").filter(Boolean);
-      sourceId = urlParts[urlParts.length - 1] || `hash-${title.slice(0, 20)}`;
+      sourceId = urlParts[urlParts.length - 1] || `hash-${Date.now()}`;
     }
     
-    // Clean description (remove HTML)
-    let description = descMatch ? descMatch[1] : "";
-    description = description
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&[^;]+;/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 500);
-    
-    // Get normalized categories (excluding dates)
+    // Get normalized categories (excluding dates and N/A)
     const normalizedCats = categories
       .map(normalizeCategory)
       .filter(c => c.length > 0);
@@ -149,46 +151,14 @@ function parseRssFeed(xml: string): Array<{
       deadline: extractDeadline(categories),
       publishedAt: pubDateMatch ? parseRssDate(pubDateMatch[1]) : new Date().toISOString().split("T")[0],
       categories: [...new Set(normalizedCats)].slice(0, 3),
-      description,
+      description: `Tender opportunity from ${extractOrganization(title)}. Categories: ${normalizedCats.join(", ") || "General"}`,
     });
   }
 
   return items;
 }
 
-// Fetch with retry
-async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept": "application/rss+xml, application/xml, text/xml, */*",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-      });
-
-      if (response.ok) {
-        return await response.text();
-      }
-      
-      if (response.status === 503 || response.status === 429) {
-        console.log(`[Scraper] Got ${response.status}, retry ${i + 1}/${maxRetries}...`);
-        await new Promise(r => setTimeout(r, 2000 * (i + 1)));
-        continue;
-      }
-      
-      throw new Error(`HTTP ${response.status}`);
-    } catch (error) {
-      if (i === maxRetries - 1) throw error;
-      console.log(`[Scraper] Fetch error, retry ${i + 1}...`);
-      await new Promise(r => setTimeout(r, 2000 * (i + 1)));
-    }
-  }
-  throw new Error("Max retries exceeded");
-}
-
-// Scrape the RSS feed
+// Main scraper action
 export const scrapeListing = action({
   args: {},
   handler: async (ctx): Promise<{ scraped: number; added: number; skipped: number }> => {
@@ -205,16 +175,32 @@ export const scrapeListing = action({
         message: `Fetching ${RSS_URL}`,
         metadata: { url: RSS_URL },
       });
+
+      const response = await fetch(RSS_URL, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Accept": "application/rss+xml, application/xml, text/xml, */*",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const xml = await response.text();
       
-      const xml = await fetchWithRetry(RSS_URL);
-      console.log(`[Scraper] Got ${xml.length} bytes`);
-      
+      await ctx.runMutation(internal.scraperLogs.log, {
+        source: SOURCE_ID,
+        action: "parse",
+        message: `Received ${xml.length} bytes, parsing RSS...`,
+      });
+
       const listings = parseRssFeed(xml);
       
       await ctx.runMutation(internal.scraperLogs.log, {
         source: SOURCE_ID,
         action: "parse",
-        message: `Parsed ${listings.length} items from RSS`,
+        message: `Found ${listings.length} tender listings`,
         metadata: { count: listings.length },
       });
 
@@ -222,7 +208,7 @@ export const scrapeListing = action({
       let skipped = 0;
 
       for (const listing of listings) {
-        // Check if already exists
+        // Check for duplicate
         const exists = await ctx.runQuery(api.tenders.getBySourceId, {
           source: SOURCE_ID,
           sourceId: listing.sourceId,
@@ -233,15 +219,15 @@ export const scrapeListing = action({
           continue;
         }
 
-        // Insert new tender
+        // Insert
         await ctx.runMutation(api.tenders.createFromScraper, {
           title: listing.title,
           organization: listing.organization,
-          budget: 0, // Unknown from RSS
+          budget: 0,
           deadline: listing.deadline,
           category: listing.categories[0] || "General",
-          categories: listing.categories,
-          description: listing.description || `Tender from ${listing.organization}. View full details at source.`,
+          categories: listing.categories.length > 0 ? listing.categories : ["General"],
+          description: listing.description,
           location: "Nigeria",
           requirements: [],
           missing: [],
@@ -279,13 +265,5 @@ export const scrapeListing = action({
       });
       throw error;
     }
-  },
-});
-
-// Manual trigger for testing
-export const triggerScrape = action({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.runAction(api.scrapers.publicprocurement.scrapeListing, {});
   },
 });

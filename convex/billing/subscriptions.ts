@@ -49,7 +49,17 @@ export const getMine = query({
 async function getCurrentUsage(ctx: any, userId: any, subscription?: any) {
   const now = Date.now();
   
-  // First try to get usage record for current period
+  // Determine limits based on current subscription (always use live plan limits)
+  let alertsLimit = 5;  // Free tier default
+  let proposalsLimit = 1;
+  
+  if (subscription && subscription.status === "active") {
+    const planLimits = PLANS[subscription.plan as keyof typeof PLANS];
+    alertsLimit = planLimits?.alerts ?? 5;
+    proposalsLimit = planLimits?.proposals ?? 1;
+  }
+  
+  // Get usage record for current period
   const usage = await ctx.db
     .query("usage")
     .withIndex("by_user", (q: any) => q.eq("userId", userId))
@@ -61,31 +71,22 @@ async function getCurrentUsage(ctx: any, userId: any, subscription?: any) {
     )
     .first();
 
-  // If we have a subscription but no usage record, create one
-  if (!usage && subscription && subscription.status === "active") {
-    const planLimits = PLANS[subscription.plan as keyof typeof PLANS];
-    return {
-      alertsUsed: 0,
-      proposalsUsed: 0,
-      alertsLimit: planLimits?.alerts ?? 5,
-      proposalsLimit: planLimits?.proposals ?? 1,
-    };
-  }
-
   if (!usage) {
+    // No usage record - return defaults with plan limits
     return {
       alertsUsed: 0,
       proposalsUsed: 0,
-      alertsLimit: 5, // Free tier
-      proposalsLimit: 1,
+      alertsLimit,
+      proposalsLimit,
     };
   }
 
+  // Return actual usage but with CURRENT plan limits (in case of upgrade)
   return {
     alertsUsed: usage.alertsUsed,
     proposalsUsed: usage.proposalsUsed,
-    alertsLimit: usage.alertsLimit,
-    proposalsLimit: usage.proposalsLimit,
+    alertsLimit,  // Always use current plan limits
+    proposalsLimit,  // Always use current plan limits
   };
 }
 
@@ -136,6 +137,18 @@ export const createFromPayment = mutation({
       });
     }
 
+    // Get existing usage record to preserve usage counts on upgrade
+    const existingUsage = await ctx.db
+      .query("usage")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .filter((q) => 
+        q.and(
+          q.lte(q.field("periodStart"), now),
+          q.gte(q.field("periodEnd"), now)
+        )
+      )
+      .first();
+
     // Calculate period (monthly)
     const periodEnd = now + 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -155,19 +168,30 @@ export const createFromPayment = mutation({
       updatedAt: now,
     });
 
-    // Create usage record for this period
-    await ctx.db.insert("usage", {
-      userId: args.userId,
-      subscriptionId,
-      periodStart: now,
-      periodEnd,
-      alertsLimit: planDetails.alerts,
-      proposalsLimit: planDetails.proposals,
-      alertsUsed: 0,
-      proposalsUsed: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // If upgrading: update existing usage record with new limits
+    // If new: create fresh usage record
+    if (existingUsage) {
+      await ctx.db.patch(existingUsage._id, {
+        subscriptionId,
+        alertsLimit: planDetails.alerts,
+        proposalsLimit: planDetails.proposals,
+        periodEnd, // Extend period to new subscription end
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("usage", {
+        userId: args.userId,
+        subscriptionId,
+        periodStart: now,
+        periodEnd,
+        alertsLimit: planDetails.alerts,
+        proposalsLimit: planDetails.proposals,
+        alertsUsed: 0,
+        proposalsUsed: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     return subscriptionId;
   },

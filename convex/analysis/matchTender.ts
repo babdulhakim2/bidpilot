@@ -4,7 +4,7 @@ import { action } from "../_generated/server";
 import { v } from "convex/values";
 import { api } from "../_generated/api";
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 interface MatchResult {
   title: string;
@@ -216,5 +216,117 @@ export const saveTenderFromAnalysis = action({
     });
 
     return tenderId;
+  },
+});
+
+// Analyze a tender against the user's profile (for modal display)
+export const analyzeTenderForUser = action({
+  args: {
+    tenderTitle: v.string(),
+    tenderDescription: v.string(),
+    tenderRequirements: v.array(v.string()),
+    tenderCategory: v.string(),
+  },
+  handler: async (ctx, args): Promise<{
+    matchScore: number;
+    matchReasons: string[];
+    missingRequirements: string[];
+    recommendations: string[];
+    howToWin: string;
+  }> => {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY not configured");
+    }
+
+    // Get user's profile and documents
+    const user = await ctx.runQuery(api.users.me);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Get user's verified documents with extracted content
+    const documents = await ctx.runQuery(api.documents.listMine);
+    const verifiedDocs = documents.filter((d: any) => d.status === "verified" && d.extractedInsights);
+
+    // Build company profile from documents
+    const companyProfile = buildCompanyProfile(user, verifiedDocs);
+
+    const prompt = `You are a tender matching assistant for Nigerian government contracts.
+
+COMPANY PROFILE:
+${companyProfile}
+
+TENDER DETAILS:
+Title: ${args.tenderTitle}
+Category: ${args.tenderCategory}
+Description: ${args.tenderDescription}
+Requirements: ${args.tenderRequirements.join(", ") || "Not specified"}
+
+Analyze how well this company matches this tender. Return a JSON response:
+{
+  "matchScore": 0-100,
+  "matchReasons": ["3-5 specific reasons why this company is a good match"],
+  "missingRequirements": ["Requirements or documents the company may need"],
+  "recommendations": ["3-5 practical next steps to improve chances"],
+  "howToWin": "A 2-3 sentence strategy to win this tender"
+}
+
+matchScore guide:
+- 80-100: Excellent - meets most requirements
+- 60-79: Good - some gaps but winnable
+- 40-59: Partial - significant prep needed
+- 0-39: Poor - major requirements missing
+
+Be specific and actionable. Return ONLY valid JSON.`;
+
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 2048,
+      },
+    };
+
+    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      throw new Error("No response from Gemini");
+    }
+
+    try {
+      const cleanJson = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const parsed = JSON.parse(cleanJson);
+      
+      return {
+        matchScore: Math.min(100, Math.max(0, parsed.matchScore || 50)),
+        matchReasons: parsed.matchReasons || [],
+        missingRequirements: parsed.missingRequirements || [],
+        recommendations: parsed.recommendations || [],
+        howToWin: parsed.howToWin || "",
+      };
+    } catch (e) {
+      console.error("Failed to parse response:", text);
+      // Return defaults on parse error
+      return {
+        matchScore: 50,
+        matchReasons: ["Unable to analyze - please try again"],
+        missingRequirements: [],
+        recommendations: ["Review tender requirements manually"],
+        howToWin: "Review tender details and prepare your documents.",
+      };
+    }
   },
 });

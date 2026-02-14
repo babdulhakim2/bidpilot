@@ -3,10 +3,10 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Scrape tenders every 5 minutes
+// Scrape tenders every 10 minutes
 crons.interval(
   "scrape-tenders",
-  { minutes: 5 },
+  { minutes: 10 },
   internal.scrapers.scheduler.runAllScrapers
 );
 

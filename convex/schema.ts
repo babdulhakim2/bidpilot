@@ -99,13 +99,40 @@ export default defineSchema({
     status: v.union(v.literal("draft"), v.literal("generated"), v.literal("submitted")),
     sections: v.array(v.string()),
     content: v.optional(v.string()), // Generated proposal content
-    storageId: v.optional(v.id("_storage")), // PDF storage reference
+    storageId: v.optional(v.id("_storage")), // Legacy PDF storage reference
+    // Claude-generated PDF
+    pdfStorageId: v.optional(v.id("_storage")),
+    pdfUrl: v.optional(v.string()),
+    // Pipeline progress tracking
+    pipelineProgress: v.optional(v.object({
+      stage: v.string(),
+      progress: v.number(),
+      message: v.string(),
+      structure: v.optional(v.any()),
+      research: v.optional(v.any()),
+      sections: v.optional(v.any()),
+      error: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
     .index("by_tender", ["tenderId"])
     .index("by_status", ["status"]),
+
+  // Proposal Images - stored images linked to proposals
+  proposalImages: defineTable({
+    proposalId: v.id("proposals"),
+    sectionId: v.string(), // e.g., "section-1"
+    sectionTitle: v.string(),
+    prompt: v.string(),
+    storageId: v.id("_storage"),
+    url: v.string(),
+    order: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_proposal", ["proposalId"])
+    .index("by_section", ["proposalId", "sectionId"]),
 
   // Subscriptions - tracks active plans
   subscriptions: defineTable({
@@ -189,6 +216,32 @@ export default defineSchema({
     .index("by_subscription", ["subscriptionId"])
     .index("by_reference", ["paystackReference"])
     .index("by_status", ["status"]),
+
+  // App settings (admin configurable)
+  settings: defineTable({
+    key: v.string(),
+    value: v.string(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
+  // Scraper logs for real-time monitoring
+  scraperLogs: defineTable({
+    source: v.string(),           // e.g., "etenders.com.ng"
+    action: v.string(),           // "start", "fetch", "parse", "insert", "skip", "error", "complete"
+    message: v.string(),
+    metadata: v.optional(v.object({
+      tenderId: v.optional(v.string()),
+      tenderTitle: v.optional(v.string()),
+      count: v.optional(v.number()),
+      added: v.optional(v.number()),
+      skipped: v.optional(v.number()),
+      error: v.optional(v.string()),
+      url: v.optional(v.string()),
+    })),
+    timestamp: v.number(),
+  })
+    .index("by_source", ["source", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
 
   // Document chunks with embeddings for vector search
   documentChunks: defineTable({

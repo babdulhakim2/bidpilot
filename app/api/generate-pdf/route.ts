@@ -6,7 +6,7 @@ const client = new Anthropic({
 });
 
 // Beta headers required for Skills
-const BETAS: ("code-execution-2025-08-25" | "skills-2025-10-02" | "files-api-2025-04-14")[] = [
+const BETAS = [
   "code-execution-2025-08-25",
   "skills-2025-10-02", 
   "files-api-2025-04-14",
@@ -48,8 +48,7 @@ export async function POST(req: NextRequest) {
     let response = await client.beta.messages.create({
       model: "claude-sonnet-4-5-20250929",
       max_tokens: 16384,
-      betas: BETAS,
-      // @ts-ignore - container is a beta feature
+      betas: BETAS as any,
       container: {
         skills: [
           {
@@ -60,9 +59,8 @@ export async function POST(req: NextRequest) {
         ],
       },
       messages: [{ role: "user", content: prompt }],
-      // @ts-ignore - code_execution tool format
-      tools: [{ type: "code_execution" }],
-    });
+      tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+    } as any);
 
     // Step 2: Handle pause_turn for long PDF generation
     let messages: any[] = [{ role: "user", content: prompt }];
@@ -72,14 +70,12 @@ export async function POST(req: NextRequest) {
     while (response.stop_reason === "pause_turn" && retries < MAX_RETRIES) {
       messages.push({ role: "assistant", content: response.content });
       
-      // @ts-ignore - container is a beta feature
-      const containerId = response.container?.id;
+      const containerId = (response as any).container?.id;
       
       response = await client.beta.messages.create({
         model: "claude-sonnet-4-5-20250929",
         max_tokens: 16384,
-        betas: BETAS,
-        // @ts-ignore - container is a beta feature
+        betas: BETAS as any,
         container: {
           id: containerId,
           skills: [
@@ -87,9 +83,8 @@ export async function POST(req: NextRequest) {
           ],
         },
         messages,
-        // @ts-ignore - code_execution tool format
-        tools: [{ type: "code_execution" }],
-      });
+        tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+      } as any);
       retries++;
     }
 
@@ -106,16 +101,21 @@ export async function POST(req: NextRequest) {
 
     // Step 4: Download the PDF via Files API
     const fileId = fileIds[0];
-    // @ts-ignore - beta method
-    const fileResponse = await client.beta.files.download(fileId, {
+    const fileContent = await (client.beta.files as any).download(fileId, {
       betas: ["files-api-2025-04-14"],
     });
 
-    // Convert response to buffer
-    const arrayBuffer = await fileResponse.arrayBuffer();
-    const pdfBuffer = Buffer.from(arrayBuffer);
+    // Convert the readable stream to a buffer
+    const chunks: Uint8Array[] = [];
+    const reader = fileContent.body!.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const pdfBuffer = Buffer.concat(chunks);
 
-    // Return the PDF as base64 for Convex storage
+    // Return the PDF as base64 for frontend
     const base64Pdf = pdfBuffer.toString("base64");
     
     return NextResponse.json({
@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("PDF generation error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate PDF" },
-      { status: 500 }
+      { error: `${error.status || 500} ${JSON.stringify(error.error || error.message)}` },
+      { status: error.status || 500 }
     );
   }
 }
@@ -139,20 +139,22 @@ function extractFileIds(response: any): string[] {
   const fileIds: string[] = [];
 
   for (const item of response.content) {
-    if (item.type === "code_execution_tool_result") {
-      if (Array.isArray(item.content)) {
-        for (const block of item.content) {
-          if (block.type === "file" && block.file_id) {
-            fileIds.push(block.file_id);
+    // Skills return files inside code execution results
+    if (item.type === "bash_code_execution_tool_result") {
+      const resultContent = item.content;
+      if (resultContent?.content) {
+        for (const file of resultContent.content) {
+          if (file.file_id) {
+            fileIds.push(file.file_id);
           }
         }
       }
     }
     
-    if (item.type === "server_tool_result" || item.type === "tool_result") {
-      const content = item.content;
-      if (Array.isArray(content)) {
-        for (const block of content) {
+    // Also check for server_tool_use results
+    if (item.type === "tool_result" || item.type === "code_execution_tool_result") {
+      if (Array.isArray(item.content)) {
+        for (const block of item.content) {
           if (block.file_id) fileIds.push(block.file_id);
         }
       }
@@ -226,17 +228,12 @@ ${section.content}
   }
 
   prompt += `
-IMPORTANT INSTRUCTIONS:
-1. Use reportlab for PDF generation
-2. Generate any charts, diagrams, or visualizations programmatically with matplotlib
-3. Ensure the document looks professional and is suitable for a Nigerian government tender submission
-4. Include proper page breaks between major sections
-5. Use bullet points and numbered lists where appropriate
-6. Make tables professional with borders and shading
-7. Save the final PDF to /mnt/user-data/outputs/proposal.pdf
-8. The PDF should be polished, formal, and presentation-ready
-
-Generate the PDF now.`;
+IMPORTANT:
+- Use reportlab for PDF generation
+- Generate all visualizations programmatically with matplotlib/Pillow
+- Save the final PDF to /mnt/user-data/outputs/proposal.pdf
+- The PDF should be polished and presentation-ready
+`;
 
   return prompt;
 }

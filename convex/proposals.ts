@@ -215,9 +215,14 @@ export const removeMine = mutation({
     if (!proposal) throw new Error("Proposal not found");
     if (proposal.userId !== user._id) throw new Error("Not authorized");
     
-    // Delete PDF from storage if exists
+    // Delete legacy PDF from storage if exists
     if (proposal.storageId) {
       await ctx.storage.delete(proposal.storageId);
+    }
+    
+    // Delete Claude-generated PDF from storage if exists
+    if (proposal.pdfStorageId) {
+      await ctx.storage.delete(proposal.pdfStorageId);
     }
     
     await ctx.db.delete(args.id);
@@ -236,5 +241,20 @@ export const remove = mutation({
     }
     
     await ctx.db.delete(args.id);
+  },
+});
+
+// Update PDF fields
+export const updatePdf = mutation({
+  args: {
+    id: v.id("proposals"),
+    pdfStorageId: v.optional(v.id("_storage")),
+    pdfUrl: v.optional(v.string()),
+    pdfGeneratedAt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...updates } = args;
+    await ctx.db.patch(id, { ...updates, updatedAt: Date.now() });
+    return await ctx.db.get(id);
   },
 });

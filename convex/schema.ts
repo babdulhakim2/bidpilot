@@ -99,7 +99,10 @@ export default defineSchema({
     status: v.union(v.literal("draft"), v.literal("generated"), v.literal("submitted")),
     sections: v.array(v.string()),
     content: v.optional(v.string()), // Generated proposal content
-    storageId: v.optional(v.id("_storage")), // PDF storage reference
+    storageId: v.optional(v.id("_storage")), // Legacy PDF storage reference
+    // Claude-generated PDF
+    pdfStorageId: v.optional(v.id("_storage")),
+    pdfUrl: v.optional(v.string()),
     // Pipeline progress tracking
     pipelineProgress: v.optional(v.object({
       stage: v.string(),

@@ -12,6 +12,7 @@
     "convex:seed": "convex run seed:seedTenders"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@clerk/clerk-react": "^5.60.0",
     "@clerk/nextjs": "^6.37.3",
     "@google/genai": "^1.41.0",

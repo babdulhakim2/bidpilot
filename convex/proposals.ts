@@ -239,6 +239,8 @@ export const update = mutation({
     content: v.optional(v.string()),
     sections: v.optional(v.array(v.string())),
     status: v.optional(v.union(v.literal("draft"), v.literal("generated"), v.literal("submitted"))),
+    pdfStorageId: v.optional(v.id("_storage")),
+    pdfUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;

@@ -8,7 +8,7 @@ import { Id } from '@/convex/_generated/dataModel';
 import Link from 'next/link';
 import { 
   ArrowLeft, Save, Loader2, Sparkles, Trash2, X,
-  FileText, Clock, AlertCircle, Search, PenTool, ImageIcon
+  FileText, Clock, AlertCircle, Search, PenTool, ImageIcon, Download, Eye
 } from 'lucide-react';
 import SectionEditor, { ProposalSection } from '@/components/SectionEditor';
 import { normalizeText } from '@/lib/textUtils';
@@ -30,6 +30,7 @@ export default function ProposalEditPage() {
   const deleteImage = useMutation(api.proposalImages.deleteBySection);
   const runPipeline = useAction(api.proposalPipeline.runPipeline);
   const generateImage = useAction(api.proposalGenerate.generateSectionImage);
+  const generatePdf = useAction(api.proposalPdf.generate);
   
   const [sections, setSections] = useState<ProposalSection[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -38,6 +39,8 @@ export default function ProposalEditPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingImageFor, setGeneratingImageFor] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   // Get pipeline progress
   const progress = proposal?.pipelineProgress;
@@ -158,6 +161,31 @@ export default function ProposalEditPage() {
       ));
     } catch (e) {
       console.error('Failed to remove image:', e);
+    }
+  };
+
+  const handleGeneratePdf = async () => {
+    if (!proposalId || sections.length === 0) return;
+    setIsGeneratingPdf(true);
+    try {
+      // Save current content first
+      await handleSave();
+      // Generate PDF via Claude
+      const result = await generatePdf({ proposalId });
+      if (result.success) {
+        alert('PDF generated successfully! You can now download it.');
+      }
+    } catch (e: any) {
+      console.error('Failed to generate PDF:', e);
+      alert(`Failed to generate PDF: ${e.message || 'Unknown error'}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleDownloadPdf = () => {
+    if (proposal?.pdfUrl) {
+      window.open(proposal.pdfUrl, '_blank');
     }
   };
 
@@ -283,14 +311,39 @@ export default function ProposalEditPage() {
           </div>
         </div>
         
-        {/* Generate Proposal Button - right side */}
+        {/* PDF Buttons - right side */}
         {sections.length > 0 && !isPipelineRunning && (
-          <button
-            className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-xl hover:bg-primary-700 transition flex items-center gap-2 shadow-lg shadow-primary-500/20 flex-shrink-0"
-          >
-            <FileText className="w-4 h-4" />
-            <span className="hidden sm:inline">Generate Proposal</span>
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Show Download if PDF exists */}
+            {proposal?.pdfUrl && (
+              <button
+                onClick={handleDownloadPdf}
+                className="px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition flex items-center gap-2"
+                title="Download PDF"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            )}
+            {/* Generate PDF Button */}
+            <button
+              onClick={handleGeneratePdf}
+              disabled={isGeneratingPdf}
+              className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-xl hover:bg-primary-700 transition flex items-center gap-2 shadow-lg shadow-primary-500/20 disabled:opacity-50"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="hidden sm:inline">Generating...</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">{proposal?.pdfUrl ? 'Regenerate PDF' : 'Generate PDF'}</span>
+                </>
+              )}
+            </button>
+          </div>
         )}
         
         {/* Generate with AI - when no sections */}

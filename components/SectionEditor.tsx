@@ -49,6 +49,7 @@ export default function SectionEditor({
   const [tempTitle, setTempTitle] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [imageRemoveConfirm, setImageRemoveConfirm] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [tempPrompt, setTempPrompt] = useState('');
@@ -276,12 +277,7 @@ export default function SectionEditor({
                     {/* Delete button inside image */}
                     {onRemoveImage && (
                       <button
-                        onClick={() => {
-                          if (confirm('Remove this image?')) {
-                            onRemoveImage(activeSection.id);
-                            updateSection(activeSection.id, { imageUrl: undefined });
-                          }
-                        }}
+                        onClick={() => setImageRemoveConfirm(activeSection.id)}
                         className="absolute top-1.5 right-1.5 p-1 bg-black/50 text-white rounded-md opacity-0 group-hover:opacity-100 transition hover:bg-red-600"
                         title="Remove image"
                       >
@@ -415,6 +411,40 @@ export default function SectionEditor({
               >
                 <Trash2 className="w-4 h-4" />
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Remove Confirmation Modal */}
+      {imageRemoveConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5">
+            <h3 className="font-semibold text-lg text-gray-900 mb-3">Remove Image?</h3>
+            <p className="text-gray-600 mb-4 text-sm">
+              Are you sure you want to remove this image? You can regenerate it anytime.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setImageRemoveConfirm(null)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (onRemoveImage) {
+                    onRemoveImage(imageRemoveConfirm);
+                    updateSection(imageRemoveConfirm, { imageUrl: undefined });
+                  }
+                  setImageRemoveConfirm(null);
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Remove
               </button>
             </div>
           </div>

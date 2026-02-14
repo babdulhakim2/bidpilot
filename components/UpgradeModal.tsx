@@ -32,7 +32,7 @@ const PLANS = [
 interface UpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  reason?: 'proposals' | 'alerts' | 'documents' | 'general';
+  reason?: 'proposals' | 'analysis' | 'documents' | 'general';
   currentUsage?: {
     used: number;
     limit: number;
@@ -54,10 +54,10 @@ export default function UpgradeModal({ isOpen, onClose, reason = 'general', curr
         return currentUsage 
           ? `You've used all ${currentUsage.limit} proposal${currentUsage.limit > 1 ? 's' : ''} this month`
           : 'You need more proposals';
-      case 'alerts':
+      case 'analysis':
         return currentUsage 
-          ? `You've used all ${currentUsage.limit} alerts this month`
-          : 'You need more tender alerts';
+          ? `You've used all ${currentUsage.limit} analysis`
+          : 'Unlock full tender analysis';
       case 'documents':
         return 'Upgrade to upload more documents';
       default:

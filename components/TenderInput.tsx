@@ -8,6 +8,7 @@ import {
   Send, Loader2, Plus, Check, X, ChevronRight, 
   AlertTriangle, Target, Calendar, MapPin, Building2, Save, Sparkles, Paperclip
 } from 'lucide-react';
+import UpgradeModal from './UpgradeModal';
 
 interface AnalysisResult {
   title: string;
@@ -40,18 +41,45 @@ export default function TenderInput() {
   const saveTender = useAction(api.analysis.matchTender.saveTenderFromAnalysis);
   const subscription = useQuery(api.billing.subscriptions.getMine);
 
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [limitReached, setLimitReached] = useState(false);
+
   const canAnalyze = subscription?.usage && (
-    subscription.usage.alertsLimit === -1 || 
-    subscription.usage.alertsUsed < subscription.usage.alertsLimit
+    subscription.usage.analysisLimit === -1 || 
+    (subscription.usage.analysisUsed ?? 0) < subscription.usage.analysisLimit
   );
 
   const handleAnalyze = async () => {
-    if (!text.trim() || !canAnalyze) return;
+    if (!text.trim()) return;
     
     setAnalyzing(true);
     setError(null);
     setResult(null);
     setSaved(false);
+    setLimitReached(false);
+
+    // Check if user has credits
+    if (!canAnalyze) {
+      // Show blurred fake result with upgrade prompt
+      setLimitReached(true);
+      setResult({
+        title: "Sample Tender Title",
+        organization: "Government Agency",
+        category: "construction",
+        budget: 50000000,
+        deadline: "2026-03-15",
+        location: "Lagos",
+        description: "This analysis is locked. Upgrade to see full details.",
+        requirements: ["Requirement 1", "Requirement 2"],
+        matchScore: 78,
+        matchReasons: ["Strong experience match", "Required certifications"],
+        missingRequirements: ["Additional documentation needed"],
+        recommendations: ["Submit early", "Review requirements"],
+        howToWin: "Focus on your experience and competitive pricing.",
+      });
+      setAnalyzing(false);
+      return;
+    }
 
     try {
       const analysis = await analyzeTender({ text: text.trim() });
@@ -191,9 +219,9 @@ export default function TenderInput() {
           </button>
           <button
             onClick={handleAnalyze}
-            disabled={!text.trim() || analyzing || !canAnalyze}
+            disabled={!text.trim() || analyzing}
             className={`p-2 rounded-full transition ${
-              text.trim() && canAnalyze && !analyzing
+              text.trim() && !analyzing
                 ? 'bg-primary-600 text-white hover:bg-primary-700'
                 : 'bg-gray-200 text-gray-400'
             }`}
@@ -207,13 +235,6 @@ export default function TenderInput() {
         </div>
       </div>
 
-      {/* Limit Warning */}
-      {!canAnalyze && (
-        <p className="text-xs text-red-500 text-center">
-          You've used all your alerts. <a href="/billing" className="underline">Upgrade</a> to continue.
-        </p>
-      )}
-
       {/* Error */}
       {error && (
         <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-center gap-2">
@@ -224,8 +245,8 @@ export default function TenderInput() {
 
       {/* Results */}
       {result && (
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-          {/* Header */}
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden relative">
+          {/* Header - always visible */}
           <div className="p-4 bg-gray-50 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`px-3 py-1.5 rounded-full font-bold text-sm ${getMatchColor(result.matchScore)}`}>
@@ -234,28 +255,30 @@ export default function TenderInput() {
               </div>
               <span className="text-sm text-gray-500 capitalize">{result.category}</span>
             </div>
-            <button
-              onClick={handleSave}
-              disabled={saving || saved}
-              className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition ${
-                saved 
-                  ? 'bg-emerald-100 text-emerald-700' 
-                  : 'bg-primary-600 text-white hover:bg-primary-700'
-              } disabled:opacity-50`}
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : saved ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {saved ? 'Saved!' : 'Save'}
-            </button>
+            {!limitReached && (
+              <button
+                onClick={handleSave}
+                disabled={saving || saved}
+                className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 transition ${
+                  saved 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : 'bg-primary-600 text-white hover:bg-primary-700'
+                } disabled:opacity-50`}
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : saved ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {saved ? 'Saved!' : 'Save'}
+              </button>
+            )}
           </div>
 
-          {/* Content */}
-          <div className="p-4 space-y-4">
+          {/* Content - blurred if limit reached */}
+          <div className={`p-4 space-y-4 ${limitReached ? 'blur-sm select-none' : ''}`}>
             <div>
               <h4 className="font-bold text-gray-900 text-lg">{result.title}</h4>
               <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-600">
@@ -344,7 +367,35 @@ export default function TenderInput() {
               </div>
             )}
           </div>
+
+          {/* Upgrade overlay when limit reached */}
+          {limitReached && (
+            <div className="absolute inset-0 top-[60px] bg-white/70 backdrop-blur-[1px] flex flex-col items-center justify-center p-6">
+              <Sparkles className="w-10 h-10 text-primary-600 mb-3" />
+              <p className="text-base font-semibold text-gray-900 text-center mb-1">
+                See full analysis
+              </p>
+              <p className="text-sm text-gray-500 text-center mb-4">
+                Unlock match insights & winning strategies
+              </p>
+              <button 
+                onClick={() => setShowUpgradeModal(true)}
+                className="px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition"
+              >
+                Upgrade to See
+              </button>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <UpgradeModal 
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          reason="analysis"
+        />
       )}
     </div>
   );

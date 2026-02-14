@@ -10,6 +10,7 @@ import {
   X, Check, Building2, MapPin, ExternalLink, Bookmark, Sparkles, Loader2,
   Target, AlertTriangle, ChevronRight, Lightbulb
 } from 'lucide-react';
+import UpgradeModal from './UpgradeModal';
 
 interface TenderModalProps {
   tender: any;
@@ -30,11 +31,13 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [matchAnalysis, setMatchAnalysis] = useState<MatchAnalysis | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   
   const createProposal = useMutation(api.proposals.createMine);
   const runPipeline = useAction(api.proposalPipeline.runPipeline);
   const analyzeTender = useAction(api.analysis.matchTender.analyzeTenderForUser);
   const subscription = useQuery(api.billing.subscriptions.getMine);
+  const canUseProposal = useQuery(api.billing.subscriptions.canUse, { type: 'proposal' });
 
   const isPaid = subscription?.plan && subscription.plan !== 'free';
 
@@ -82,6 +85,13 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
       alert('Please sign in to generate proposals');
       return;
     }
+    
+    // Check if user can create more proposals
+    if (canUseProposal && !canUseProposal.allowed) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    
     setGenerating(true);
     try {
       // Create the proposal first (createMine gets user from auth)
@@ -105,7 +115,12 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
         
     } catch (error: any) {
       console.error('Failed to create proposal:', error);
-      alert(`Failed to create proposal: ${error.message || 'Unknown error'}`);
+      // Check if it's a limit error
+      if (error.message?.includes('limit reached')) {
+        setShowUpgradeModal(true);
+      } else {
+        alert(`Failed to create proposal: ${error.message || 'Unknown error'}`);
+      }
       setGenerating(false);
     }
   };
@@ -307,15 +322,21 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
             </>
           )}
 
-          {/* Upgrade CTA for free users */}
-          {!isPaid && (
+          {/* Upgrade CTA for free users or users at limit */}
+          {(!isPaid || (canUseProposal && !canUseProposal.allowed)) && (
             <div className="p-4 bg-gray-50 rounded-xl mb-6 text-center">
               <p className="text-sm text-gray-600 mb-2">
-                Upgrade to see personalized match scores and winning strategies
+                {!isPaid 
+                  ? 'Upgrade to see personalized match scores and winning strategies'
+                  : `You've used all ${canUseProposal?.limit || 0} proposals this month`
+                }
               </p>
-              <a href="/billing" className="text-sm font-medium text-primary-600 hover:text-primary-700">
+              <button 
+                onClick={() => setShowUpgradeModal(true)}
+                className="text-sm font-medium text-primary-600 hover:text-primary-700"
+              >
                 Upgrade Now →
-              </a>
+              </button>
             </div>
           )}
 
@@ -325,7 +346,7 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
             </button>
             <button 
               onClick={handleGenerateProposal}
-              disabled={generating || !isPaid}
+              disabled={generating || !isPaid || (canUseProposal && !canUseProposal.allowed)}
               className="flex-1 py-3 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {generating ? (
@@ -338,6 +359,14 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
           </div>
         </div>
       </div>
+      
+      {/* Upgrade Modal */}
+      <UpgradeModal 
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        reason="proposals"
+        currentUsage={canUseProposal ? { used: canUseProposal.used || 0, limit: canUseProposal.limit || 0 } : undefined}
+      />
     </div>
   );
 }

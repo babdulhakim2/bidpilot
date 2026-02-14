@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { requireUser, getUser } from "./lib/auth";
+import { PLANS } from "./billing/paystack";
 
 // Get all proposals for current authenticated user
 export const listMine = query({
@@ -58,7 +59,61 @@ export const createMine = mutation({
     const user = await requireUser(ctx);
     const now = Date.now();
     
-    return await ctx.db.insert("proposals", {
+    // Get current subscription
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first();
+    
+    // Determine limits based on plan
+    let proposalsLimit = 1; // Free tier
+    if (subscription) {
+      const planLimits = PLANS[subscription.plan as keyof typeof PLANS];
+      proposalsLimit = planLimits?.proposals ?? 1;
+    }
+    
+    // Get or create current usage record
+    let usage = await ctx.db
+      .query("usage")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .filter((q) =>
+        q.and(
+          q.lte(q.field("periodStart"), now),
+          q.gte(q.field("periodEnd"), now)
+        )
+      )
+      .first();
+
+    if (!usage) {
+      // Create free tier usage for this month
+      const periodStart = now;
+      const periodEnd = now + 30 * 24 * 60 * 60 * 1000;
+
+      const usageId = await ctx.db.insert("usage", {
+        userId: user._id,
+        periodStart,
+        periodEnd,
+        alertsLimit: 5,
+        proposalsLimit,
+        alertsUsed: 0,
+        proposalsUsed: 0,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      usage = await ctx.db.get(usageId);
+    }
+
+    if (!usage) throw new Error("Failed to get usage");
+
+    // Check proposal limit (-1 means unlimited)
+    if (proposalsLimit !== -1 && usage.proposalsUsed >= proposalsLimit) {
+      throw new Error(`Proposal limit reached. You've used all ${proposalsLimit} proposals this month. Please upgrade your plan.`);
+    }
+    
+    // Create the proposal
+    const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       tenderId: args.tenderId,
       tenderTitle: args.tenderTitle,
@@ -67,6 +122,14 @@ export const createMine = mutation({
       createdAt: now,
       updatedAt: now,
     });
+    
+    // Increment usage
+    await ctx.db.patch(usage._id, {
+      proposalsUsed: usage.proposalsUsed + 1,
+      updatedAt: now,
+    });
+    
+    return proposalId;
   },
 });
 

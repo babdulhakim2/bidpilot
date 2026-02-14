@@ -2,6 +2,7 @@
 
 import { useStore, formatNaira, daysUntil, getMatchColor } from '@/lib/store';
 import { ArrowLeft, Bookmark, Pin, Check, AlertTriangle, HelpCircle, Download, Sparkles, Loader2 } from 'lucide-react';
+import { normalizeText, toSentenceCase } from '@/lib/textUtils';
 
 export default function TenderDetail() {
   const { selectedTender, setShowTenderDetail, generateProposal, isGenerating, documents, toggleSaveTender } = useStore();
@@ -52,9 +53,9 @@ export default function TenderDetail() {
         {/* Content */}
         <div className="p-5">
           <h1 className="font-display text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-            {selectedTender.title}
+            {normalizeText(selectedTender.title)}
           </h1>
-          <p className="text-gray-600 mb-6">{selectedTender.organization}</p>
+          <p className="text-gray-600 mb-6">{normalizeText(selectedTender.organization)}</p>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mb-6">
@@ -79,22 +80,22 @@ export default function TenderDetail() {
           {/* Description */}
           <div className="mb-6">
             <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
-            <p className="text-gray-600 text-sm leading-relaxed">{selectedTender.description}</p>
+            <p className="text-gray-600 text-sm leading-relaxed">{toSentenceCase(selectedTender.description)}</p>
           </div>
 
           {/* Details */}
           <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
             <div>
               <span className="text-gray-500">Location:</span>
-              <div className="font-medium text-gray-900">{selectedTender.location}</div>
+              <div className="font-medium text-gray-900">{normalizeText(selectedTender.location)}</div>
             </div>
             <div>
               <span className="text-gray-500">Category:</span>
-              <div className="font-medium text-gray-900">{selectedTender.category}</div>
+              <div className="font-medium text-gray-900">{normalizeText(selectedTender.category)}</div>
             </div>
             <div>
               <span className="text-gray-500">Source:</span>
-              <div className="font-medium text-gray-900">{selectedTender.source}</div>
+              <div className="font-medium text-gray-900">{normalizeText(selectedTender.source)}</div>
             </div>
             <div>
               <span className="text-gray-500">Published:</span>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useAction } from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import { useCurrentUser } from '@/hooks/useUser';
@@ -24,13 +25,14 @@ interface MatchAnalysis {
 }
 
 export default function TenderModal({ tender, onClose }: TenderModalProps) {
+  const router = useRouter();
   const { userId } = useCurrentUser();
   const [generating, setGenerating] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [matchAnalysis, setMatchAnalysis] = useState<MatchAnalysis | null>(null);
   
-  const createProposal = useMutation(api.proposals.create);
-  const generateProposal = useMutation(api.proposals.generate);
+  const createProposal = useMutation(api.proposals.createMine);
+  const runPipeline = useAction(api.proposalPipeline.runPipeline);
   const analyzeTender = useAction(api.analysis.matchTender.analyzeTenderForUser);
   const subscription = useQuery(api.billing.subscriptions.getMine);
 
@@ -76,24 +78,39 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
   };
 
   const handleGenerateProposal = async () => {
-    if (!userId) return;
+    if (!userId) {
+      alert('Please sign in to generate proposals');
+      return;
+    }
     setGenerating(true);
     try {
+      // Create the proposal first (createMine gets user from auth)
       const proposalId = await createProposal({
-        userId,
         tenderId: tender._id,
         tenderTitle: tender.title,
       });
-      await generateProposal({ id: proposalId });
+      
+      console.log('[TenderModal] Created proposal:', proposalId);
+      
+      // Close modal first
       onClose();
-    } catch (error) {
-      console.error('Failed to generate proposal:', error);
-    } finally {
+      
+      // Navigate to proposal page to show progress
+      router.push(`/dashboard/proposals/${proposalId}`);
+      
+      // Start the pipeline in background (don't await - let it run)
+      runPipeline({ proposalId })
+        .then(() => console.log('[TenderModal] Pipeline complete'))
+        .catch((e) => console.error('[TenderModal] Pipeline error:', e));
+        
+    } catch (error: any) {
+      console.error('Failed to create proposal:', error);
+      alert(`Failed to create proposal: ${error.message || 'Unknown error'}`);
       setGenerating(false);
     }
   };
 
-  const displayScore = matchAnalysis?.matchScore ?? tender.matchScore ?? 0;
+  const displayScore = matchAnalysis?.matchScore ?? tender.matchScore ?? null;
 
   return (
     <div 
@@ -119,12 +136,26 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
         <div className="p-6 pt-4 pb-32 sm:pb-24 lg:pb-8">
           {/* Match Score Banner (for paid users) */}
           {isPaid && (
-            <div className={`flex items-center justify-between p-4 rounded-2xl mb-4 ${getScoreColor(displayScore)}`}>
+            <div className={`flex items-center justify-between p-4 rounded-2xl mb-4 ${displayScore !== null ? getScoreColor(displayScore) : 'bg-gray-100 text-gray-600'}`}>
               <div className="flex items-center gap-3">
                 <Target className="w-6 h-6" />
                 <div>
-                  <div className="font-bold text-2xl">{displayScore}%</div>
-                  <div className="text-sm opacity-80">Match Score</div>
+                  {displayScore !== null ? (
+                    <>
+                      <div className="font-bold text-2xl">{displayScore}%</div>
+                      <div className="text-sm opacity-80">Match Score</div>
+                    </>
+                  ) : analyzing ? (
+                    <>
+                      <div className="font-bold text-lg">Analyzing...</div>
+                      <div className="text-sm opacity-80">Calculating match</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-bold text-lg">—</div>
+                      <div className="text-sm opacity-80">Match Score</div>
+                    </>
+                  )}
                 </div>
               </div>
               {analyzing && <Loader2 className="w-5 h-5 animate-spin" />}
@@ -160,7 +191,7 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
           
           <div className="flex items-center gap-2 text-gray-600 mb-2">
             <MapPin className="w-4 h-4" />
-            <span className="text-sm">{tender.location}</span>
+            <span className="text-sm">{toTitleCase(tender.location)}</span>
           </div>
           
           {tender.source && (
@@ -186,7 +217,7 @@ export default function TenderModal({ tender, onClose }: TenderModalProps) {
             </div>
           )}
           
-          <p className="text-gray-600 mb-6">{tender.description}</p>
+          <p className="text-gray-600 mb-6">{toTitleCase(tender.description)}</p>
 
           {/* Match Analysis (Paid Users Only) */}
           {isPaid && matchAnalysis && (

@@ -2,6 +2,7 @@
 
 import { Tender, formatNaira, daysUntil, getMatchColor, getMatchBg, useStore } from '@/lib/store';
 import { Bookmark, Pin, AlertTriangle, Loader2, ArrowRight } from 'lucide-react';
+import { normalizeText } from '@/lib/textUtils';
 
 interface TenderCardProps {
   tender: Tender;
@@ -40,8 +41,8 @@ export default function TenderCard({ tender, compact = false }: TenderCardProps)
               </span>
             )}
           </div>
-          <h3 className="font-semibold text-gray-900 truncate">{tender.title}</h3>
-          <p className="text-sm text-gray-600 truncate">{tender.organization}</p>
+          <h3 className="font-semibold text-gray-900 truncate">{normalizeText(tender.title)}</h3>
+          <p className="text-sm text-gray-600 truncate">{normalizeText(tender.organization)}</p>
         </div>
         <div className="text-right flex-shrink-0">
           <div className={`text-sm font-medium ${days <= 3 ? 'text-red-600' : days <= 7 ? 'text-amber-600' : 'text-gray-900'}`}>

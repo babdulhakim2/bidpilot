@@ -65,7 +65,7 @@ export default function TendersPage() {
             >
               <div className="flex items-start justify-between mb-2 gap-2">
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusColor(tender.status)}`}>
-                  {tender.category}
+                  {toTitleCase(tender.category)}
                 </span>
                 {daysUntil(tender.deadline) > 0 && (
                   <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">{daysUntil(tender.deadline)}d left</span>

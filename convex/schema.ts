@@ -100,12 +100,36 @@ export default defineSchema({
     sections: v.array(v.string()),
     content: v.optional(v.string()), // Generated proposal content
     storageId: v.optional(v.id("_storage")), // PDF storage reference
+    // Pipeline progress tracking
+    pipelineProgress: v.optional(v.object({
+      stage: v.string(),
+      progress: v.number(),
+      message: v.string(),
+      structure: v.optional(v.any()),
+      research: v.optional(v.any()),
+      sections: v.optional(v.any()),
+      error: v.optional(v.string()),
+    })),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
     .index("by_tender", ["tenderId"])
     .index("by_status", ["status"]),
+
+  // Proposal Images - stored images linked to proposals
+  proposalImages: defineTable({
+    proposalId: v.id("proposals"),
+    sectionId: v.string(), // e.g., "section-1"
+    sectionTitle: v.string(),
+    prompt: v.string(),
+    storageId: v.id("_storage"),
+    url: v.string(),
+    order: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_proposal", ["proposalId"])
+    .index("by_section", ["proposalId", "sectionId"]),
 
   // Subscriptions - tracks active plans
   subscriptions: defineTable({

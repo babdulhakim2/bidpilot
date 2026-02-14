@@ -215,6 +215,17 @@ export const removeMine = mutation({
     if (!proposal) throw new Error("Proposal not found");
     if (proposal.userId !== user._id) throw new Error("Not authorized");
     
+    // Delete all proposal images from storage
+    const images = await ctx.db
+      .query("proposalImages")
+      .withIndex("by_proposal", (q) => q.eq("proposalId", args.id))
+      .collect();
+    
+    for (const img of images) {
+      await ctx.storage.delete(img.storageId);
+      await ctx.db.delete(img._id);
+    }
+    
     // Delete PDF from storage if exists
     if (proposal.storageId) {
       await ctx.storage.delete(proposal.storageId);
@@ -236,5 +247,36 @@ export const remove = mutation({
     }
     
     await ctx.db.delete(args.id);
+  },
+});
+
+// Update pipeline progress
+export const updateProgress = mutation({
+  args: {
+    id: v.id("proposals"),
+    progress: v.object({
+      stage: v.string(),
+      progress: v.number(),
+      message: v.string(),
+      structure: v.optional(v.any()),
+      research: v.optional(v.any()),
+      sections: v.optional(v.any()),
+      error: v.optional(v.string()),
+    }),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      pipelineProgress: args.progress,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// Get pipeline progress
+export const getProgress = query({
+  args: { id: v.id("proposals") },
+  handler: async (ctx, args) => {
+    const proposal = await ctx.db.get(args.id);
+    return proposal?.pipelineProgress || null;
   },
 });

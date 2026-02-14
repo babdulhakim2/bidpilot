@@ -1,16 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
-
-// Beta headers required for Skills
-const BETAS = [
-  "code-execution-2025-08-25",
-  "skills-2025-10-02", 
-  "files-api-2025-04-14",
-];
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
 interface ProposalSection {
   id: string;
@@ -41,58 +32,94 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build the prompt with proposal content
     const prompt = buildPrompt(content);
 
-    // Step 1: Call Claude with the PDF skill
-    let response = await client.beta.messages.create({
-      model: "claude-sonnet-4-5-20250929",
-      max_tokens: 16384,
-      betas: BETAS as any,
-      container: {
-        skills: [
-          {
-            type: "anthropic",
-            skill_id: "pdf",
-            version: "latest",
-          },
-        ],
+    // Step 1: Call Claude with the PDF skill using raw fetch
+    let response = await fetch(ANTHROPIC_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "code-execution-2025-08-25,skills-2025-10-02,files-api-2025-04-14",
       },
-      messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "code_execution_20250825", name: "code_execution" }],
-    } as any);
+      body: JSON.stringify({
+        model: "claude-sonnet-4-5-20250929",
+        max_tokens: 16384,
+        container: {
+          skills: [
+            {
+              type: "anthropic",
+              skill_id: "pdf",
+              version: "latest",
+            },
+          ],
+        },
+        messages: [{ role: "user", content: prompt }],
+        tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+      }),
+    });
+
+    let result = await response.json();
+
+    if (!response.ok) {
+      console.error("Anthropic API error:", result);
+      return NextResponse.json(
+        { error: `${response.status} ${JSON.stringify(result)}` },
+        { status: response.status }
+      );
+    }
 
     // Step 2: Handle pause_turn for long PDF generation
     let messages: any[] = [{ role: "user", content: prompt }];
     let retries = 0;
     const MAX_RETRIES = 15;
 
-    while (response.stop_reason === "pause_turn" && retries < MAX_RETRIES) {
-      messages.push({ role: "assistant", content: response.content });
+    while (result.stop_reason === "pause_turn" && retries < MAX_RETRIES) {
+      messages.push({ role: "assistant", content: result.content });
       
-      const containerId = (response as any).container?.id;
+      const containerId = result.container?.id;
       
-      response = await client.beta.messages.create({
-        model: "claude-sonnet-4-5-20250929",
-        max_tokens: 16384,
-        betas: BETAS as any,
-        container: {
-          id: containerId,
-          skills: [
-            { type: "anthropic", skill_id: "pdf", version: "latest" },
-          ],
+      response = await fetch(ANTHROPIC_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-beta": "code-execution-2025-08-25,skills-2025-10-02,files-api-2025-04-14",
         },
-        messages,
-        tools: [{ type: "code_execution_20250825", name: "code_execution" }],
-      } as any);
+        body: JSON.stringify({
+          model: "claude-sonnet-4-5-20250929",
+          max_tokens: 16384,
+          container: {
+            id: containerId,
+            skills: [
+              { type: "anthropic", skill_id: "pdf", version: "latest" },
+            ],
+          },
+          messages,
+          tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+        }),
+      });
+      
+      result = await response.json();
+      
+      if (!response.ok) {
+        console.error("Anthropic API error (retry):", result);
+        return NextResponse.json(
+          { error: `${response.status} ${JSON.stringify(result)}` },
+          { status: response.status }
+        );
+      }
+      
       retries++;
     }
 
     // Step 3: Extract file_id from the response
-    const fileIds = extractFileIds(response);
+    const fileIds = extractFileIds(result);
     
     if (fileIds.length === 0) {
-      console.error("No PDF file generated. Response:", JSON.stringify(response.content, null, 2));
+      console.error("No PDF file generated. Response:", JSON.stringify(result.content, null, 2));
       return NextResponse.json(
         { error: "No PDF file was generated" },
         { status: 500 }
@@ -101,19 +128,25 @@ export async function POST(req: NextRequest) {
 
     // Step 4: Download the PDF via Files API
     const fileId = fileIds[0];
-    const fileContent = await (client.beta.files as any).download(fileId, {
-      betas: ["files-api-2025-04-14"],
+    const fileResponse = await fetch(`https://api.anthropic.com/v1/files/${fileId}/content`, {
+      method: "GET",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
+      },
     });
 
-    // Convert the readable stream to a buffer
-    const chunks: Uint8Array[] = [];
-    const reader = fileContent.body!.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
+    if (!fileResponse.ok) {
+      const error = await fileResponse.text();
+      console.error("File download error:", error);
+      return NextResponse.json(
+        { error: `Failed to download PDF: ${error}` },
+        { status: 500 }
+      );
     }
-    const pdfBuffer = Buffer.concat(chunks);
+
+    const pdfBuffer = Buffer.from(await fileResponse.arrayBuffer());
 
     // Return the PDF as base64 for frontend
     const base64Pdf = pdfBuffer.toString("base64");
@@ -128,8 +161,8 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("PDF generation error:", error);
     return NextResponse.json(
-      { error: `${error.status || 500} ${JSON.stringify(error.error || error.message)}` },
-      { status: error.status || 500 }
+      { error: error.message || "Failed to generate PDF" },
+      { status: 500 }
     );
   }
 }
@@ -138,21 +171,20 @@ export async function POST(req: NextRequest) {
 function extractFileIds(response: any): string[] {
   const fileIds: string[] = [];
 
-  for (const item of response.content) {
+  for (const item of response.content || []) {
     // Skills return files inside code execution results
-    if (item.type === "bash_code_execution_tool_result") {
-      const resultContent = item.content;
-      if (resultContent?.content) {
-        for (const file of resultContent.content) {
-          if (file.file_id) {
-            fileIds.push(file.file_id);
+    if (item.type === "code_execution_tool_result") {
+      if (Array.isArray(item.content)) {
+        for (const block of item.content) {
+          if (block.type === "file" && block.file_id) {
+            fileIds.push(block.file_id);
           }
         }
       }
     }
     
     // Also check for server_tool_use results
-    if (item.type === "tool_result" || item.type === "code_execution_tool_result") {
+    if (item.type === "server_tool_result" || item.type === "tool_result") {
       if (Array.isArray(item.content)) {
         for (const block of item.content) {
           if (block.file_id) fileIds.push(block.file_id);
@@ -221,8 +253,8 @@ SECTIONS TO INCLUDE:
 ${section.content}
 `;
     
-    if (section.imageUrl) {
-      prompt += `[This section includes an image - generate a professional placeholder/diagram that represents: ${section.imagePrompt || section.title}]
+    if (section.imagePrompt) {
+      prompt += `[Generate a professional diagram/illustration for this section: ${section.imagePrompt}]
 `;
     }
   }

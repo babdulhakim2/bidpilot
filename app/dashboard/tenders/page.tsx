@@ -1,39 +1,24 @@
 'use client';
 
-import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { useCurrentUser } from '@/hooks/useUser';
 import { useStore, formatNaira, daysUntil, toTitleCase } from '@/lib/store';
-import { 
-  Target, Calendar, Pin, ChevronRight,
-  Loader2, ExternalLink
-} from 'lucide-react';
+import { ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
 import TenderModal from '@/components/TenderModal';
-import TenderInput from '@/components/TenderInput';
 
-export default function DashboardHome() {
-  const { user, isLoaded } = useCurrentUser();
+const CATEGORIES = ['All', 'Construction', 'ICT', 'Consultancy', 'Supplies', 'Healthcare'];
+
+export default function TendersPage() {
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const { selectedTenderId, setSelectedTenderId } = useStore();
 
-  // Fetch data
   const tenders = useQuery(api.tenders.list) ?? [];
-
   const selectedTender = tenders.find((t: any) => t._id === selectedTenderId);
 
-  // Loading state
-  if (!isLoaded) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
-      </div>
-    );
-  }
-
-  const profile = {
-    companyName: user?.companyName ?? 'Your Company',
-    completeness: user?.completeness ?? 25,
-  };
+  const filteredTenders = selectedCategory === 'All' 
+    ? tenders 
+    : tenders.filter((t: any) => t.category === selectedCategory);
 
   const getStatusColor = (status: string) => {
     switch(status) {
@@ -45,54 +30,34 @@ export default function DashboardHome() {
 
   return (
     <>
-      <div className="mb-8">
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-gray-900">
-          Good morning, {profile.companyName.split(' ')[0]}
-        </h1>
-        <p className="text-gray-600 mt-1">
-          You have {tenders.filter((t: any) => (t.matchScore ?? 80) >= 70).length} high-match opportunities
-        </p>
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-bold text-gray-900">Browse Opportunities</h1>
+        <p className="text-gray-600 mt-1">{tenders.length} opportunities available</p>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-8">
-        <div className="rounded-2xl p-3 sm:p-5 bg-primary-50 text-primary-700 overflow-hidden">
-          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-            <Target className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-            <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider opacity-80 hidden sm:block">Matches</span>
-          </div>
-          <div className="font-display text-base sm:text-2xl font-bold">{tenders.length}</div>
-          <div className="text-[10px] sm:text-xs opacity-70">available</div>
-        </div>
-        <div className="rounded-2xl p-3 sm:p-5 bg-amber-50 text-amber-700 overflow-hidden">
-          <div className="flex items-center gap-1 sm:gap-2 mb-1 sm:mb-2">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-            <span className="text-[10px] sm:text-xs font-medium uppercase tracking-wider opacity-80 hidden sm:block">Deadlines</span>
-          </div>
-          <div className="font-display text-base sm:text-2xl font-bold">
-            {tenders.filter((t: any) => daysUntil(t.deadline) <= 7).length}
-          </div>
-          <div className="text-[10px] sm:text-xs opacity-70">this week</div>
-        </div>
+      {/* Filter Pills */}
+      <div className="flex gap-2 overflow-x-auto pb-4 mb-4 -mx-4 px-4">
+        {CATEGORIES.map((cat) => (
+          <button 
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition ${
+              cat === selectedCategory ? 'bg-primary-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-primary-300'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
       </div>
 
-      {/* Tender Analysis Input */}
-      <section className="mb-8">
-        <TenderInput />
-      </section>
-
-      {/* Top Opportunities */}
-      <section className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-display text-lg font-bold text-gray-900 flex items-center gap-2">
-            <Pin className="w-5 h-5 text-primary-600" /> Top Opportunities
-          </h2>
-          <Link href="/dashboard/tenders" className="text-sm text-primary-600 font-medium hover:text-primary-700 flex items-center gap-1">
-            View All <ChevronRight className="w-4 h-4" />
-          </Link>
+      {filteredTenders.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-4" />
+          <p className="text-gray-500">Loading tenders...</p>
         </div>
+      ) : (
         <div className="space-y-3 sm:space-y-4 w-full">
-          {tenders.slice(0, 3).map((tender: any) => (
+          {filteredTenders.map((tender: any) => (
             <div 
               key={tender._id}
               onClick={() => setSelectedTenderId(tender._id)}
@@ -133,9 +98,8 @@ export default function DashboardHome() {
             </div>
           ))}
         </div>
-      </section>
+      )}
 
-      {/* Tender Detail Modal */}
       {selectedTender && (
         <TenderModal 
           tender={selectedTender} 

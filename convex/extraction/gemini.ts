@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
 
 interface ExtractionResult {
   markdown: string;
@@ -237,6 +237,16 @@ export const processDocument = internalAction({
       });
 
       console.log(`[Extraction] Document ${args.documentId} processed successfully`);
+
+      // Index document for vector search
+      try {
+        const indexResult = await ctx.runAction(api.vectorSearchActions.indexDocument, {
+          documentId: args.documentId,
+        });
+        console.log(`[Extraction] Document indexed with ${indexResult.chunksCreated} chunks`);
+      } catch (indexError: any) {
+        console.error(`[Extraction] Vector indexing failed (non-critical):`, indexError.message);
+      }
     } catch (error: any) {
       console.error(`[Extraction] Error processing document:`, error);
 

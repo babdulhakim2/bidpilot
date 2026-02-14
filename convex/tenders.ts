@@ -150,3 +150,44 @@ export const remove = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+// Create tender from manual analysis
+export const createFromAnalysis = mutation({
+  args: {
+    title: v.string(),
+    organization: v.string(),
+    category: v.string(),
+    budget: v.number(),
+    deadline: v.string(),
+    location: v.string(),
+    description: v.string(),
+    requirements: v.array(v.string()),
+    missing: v.array(v.string()),
+    matchScore: v.number(),
+    source: v.string(),
+    sourceText: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const status = args.matchScore >= 70 ? "qualified" 
+      : args.matchScore >= 50 ? "partial" 
+      : "low";
+    
+    return await ctx.db.insert("tenders", {
+      title: args.title,
+      organization: args.organization,
+      budget: args.budget,
+      deadline: args.deadline,
+      category: args.category,
+      description: args.description,
+      location: args.location,
+      requirements: args.requirements,
+      missing: args.missing,
+      matchScore: args.matchScore,
+      status,
+      source: args.source,
+      sourceId: `manual_${Date.now()}`,
+      publishedAt: new Date().toISOString().split("T")[0],
+      scrapedAt: Date.now(),
+    });
+  },
+});

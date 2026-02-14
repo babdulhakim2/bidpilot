@@ -190,6 +190,25 @@ export default defineSchema({
     .index("by_reference", ["paystackReference"])
     .index("by_status", ["status"]),
 
+  // Scraper logs for real-time monitoring
+  scraperLogs: defineTable({
+    source: v.string(),           // e.g., "etenders.com.ng"
+    action: v.string(),           // "start", "fetch", "parse", "insert", "skip", "error", "complete"
+    message: v.string(),
+    metadata: v.optional(v.object({
+      tenderId: v.optional(v.string()),
+      tenderTitle: v.optional(v.string()),
+      count: v.optional(v.number()),
+      added: v.optional(v.number()),
+      skipped: v.optional(v.number()),
+      error: v.optional(v.string()),
+      url: v.optional(v.string()),
+    })),
+    timestamp: v.number(),
+  })
+    .index("by_source", ["source", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
   // Document chunks with embeddings for vector search
   documentChunks: defineTable({
     documentId: v.id("documents"),

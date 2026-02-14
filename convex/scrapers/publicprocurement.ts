@@ -2,7 +2,7 @@
 
 import { action } from "../_generated/server";
 import { v } from "convex/values";
-import { api } from "../_generated/api";
+import { api, internal } from "../_generated/api";
 
 const RSS_URL = "https://www.publicprocurement.ng/feed/";
 const SOURCE_ID = "publicprocurement.ng";
@@ -192,53 +192,93 @@ async function fetchWithRetry(url: string, maxRetries = 3): Promise<string> {
 export const scrapeListing = action({
   args: {},
   handler: async (ctx): Promise<{ scraped: number; added: number; skipped: number }> => {
-    console.log("[Scraper] Fetching RSS feed...");
-    
-    const xml = await fetchWithRetry(RSS_URL);
-    console.log(`[Scraper] Got ${xml.length} bytes`);
-    
-    const listings = parseRssFeed(xml);
-    console.log(`[Scraper] Parsed ${listings.length} items`);
+    await ctx.runMutation(internal.scraperLogs.log, {
+      source: SOURCE_ID,
+      action: "start",
+      message: "Starting RSS feed fetch",
+    });
 
-    let added = 0;
-    let skipped = 0;
-
-    for (const listing of listings) {
-      // Check if already exists
-      const exists = await ctx.runQuery(api.tenders.getBySourceId, {
+    try {
+      await ctx.runMutation(internal.scraperLogs.log, {
         source: SOURCE_ID,
-        sourceId: listing.sourceId,
+        action: "fetch",
+        message: `Fetching ${RSS_URL}`,
+        metadata: { url: RSS_URL },
+      });
+      
+      const xml = await fetchWithRetry(RSS_URL);
+      console.log(`[Scraper] Got ${xml.length} bytes`);
+      
+      const listings = parseRssFeed(xml);
+      
+      await ctx.runMutation(internal.scraperLogs.log, {
+        source: SOURCE_ID,
+        action: "parse",
+        message: `Parsed ${listings.length} items from RSS`,
+        metadata: { count: listings.length },
       });
 
-      if (exists) {
-        skipped++;
-        continue;
+      let added = 0;
+      let skipped = 0;
+
+      for (const listing of listings) {
+        // Check if already exists
+        const exists = await ctx.runQuery(api.tenders.getBySourceId, {
+          source: SOURCE_ID,
+          sourceId: listing.sourceId,
+        });
+
+        if (exists) {
+          skipped++;
+          continue;
+        }
+
+        // Insert new tender
+        await ctx.runMutation(api.tenders.createFromScraper, {
+          title: listing.title,
+          organization: listing.organization,
+          budget: 0, // Unknown from RSS
+          deadline: listing.deadline,
+          category: listing.categories[0] || "General",
+          categories: listing.categories,
+          description: listing.description || `Tender from ${listing.organization}. View full details at source.`,
+          location: "Nigeria",
+          requirements: [],
+          missing: [],
+          source: SOURCE_ID,
+          sourceId: listing.sourceId,
+          sourceUrl: listing.sourceUrl,
+          publishedAt: listing.publishedAt,
+          status: "partial",
+        });
+
+        await ctx.runMutation(internal.scraperLogs.log, {
+          source: SOURCE_ID,
+          action: "insert",
+          message: `Added: ${listing.title.slice(0, 80)}...`,
+          metadata: { tenderId: listing.sourceId, tenderTitle: listing.title },
+        });
+
+        added++;
       }
 
-      // Insert new tender
-      await ctx.runMutation(api.tenders.createFromScraper, {
-        title: listing.title,
-        organization: listing.organization,
-        budget: 0, // Unknown from RSS
-        deadline: listing.deadline,
-        category: listing.categories[0] || "General",
-        categories: listing.categories,
-        description: listing.description || `Tender from ${listing.organization}. View full details at source.`,
-        location: "Nigeria",
-        requirements: [],
-        missing: [],
+      await ctx.runMutation(internal.scraperLogs.log, {
         source: SOURCE_ID,
-        sourceId: listing.sourceId,
-        sourceUrl: listing.sourceUrl,
-        publishedAt: listing.publishedAt,
-        status: "partial",
+        action: "complete",
+        message: `Scrape complete: ${added} added, ${skipped} skipped`,
+        metadata: { added, skipped, count: listings.length },
       });
 
-      added++;
+      return { scraped: listings.length, added, skipped };
+    } catch (error: any) {
+      await ctx.runMutation(internal.scraperLogs.log, {
+        source: SOURCE_ID,
+        action: "error",
+        message: `Scrape failed: ${error.message}`,
+        metadata: { error: error.message },
+      });
+      throw error;
     }
-
-    console.log(`[Scraper] Done: ${added} added, ${skipped} skipped`);
-    return { scraped: listings.length, added, skipped };
   },
 });
 

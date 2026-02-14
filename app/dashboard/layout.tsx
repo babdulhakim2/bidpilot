@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, UserButton } from '@clerk/nextjs';
-import { Home, Search, FolderOpen, FileText, User, Bell } from 'lucide-react';
+import { Home, Search, FolderOpen, FileText, User, Bell, Activity } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', icon: Home, label: 'Home' },
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/vault', icon: FolderOpen, label: 'Vault' },
   { href: '/dashboard/proposals', icon: FileText, label: 'Proposals' },
   { href: '/dashboard/profile', icon: User, label: 'Profile' },
+  { href: '/dashboard/logs', icon: Activity, label: 'Logs' },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

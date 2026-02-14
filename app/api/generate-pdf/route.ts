@@ -56,7 +56,9 @@ export async function POST(req: NextRequest) {
           ],
         },
         messages: [{ role: "user", content: prompt }],
-        tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+        tools: [{ 
+          type: "code_execution_20250825"
+        }],
       }),
     });
 
@@ -98,7 +100,9 @@ export async function POST(req: NextRequest) {
             ],
           },
           messages,
-          tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+          tools: [{ 
+            type: "code_execution_20250825"
+          }],
         }),
       });
       

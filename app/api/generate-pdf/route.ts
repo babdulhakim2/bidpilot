@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
         ],
       },
       messages: [{ role: "user", content: prompt }],
-      tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+      // @ts-ignore - code_execution tool format
+      tools: [{ type: "code_execution" }],
     });
 
     // Step 2: Handle pause_turn for long PDF generation
@@ -86,7 +87,8 @@ export async function POST(req: NextRequest) {
           ],
         },
         messages,
-        tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+        // @ts-ignore - code_execution tool format
+        tools: [{ type: "code_execution" }],
       });
       retries++;
     }
